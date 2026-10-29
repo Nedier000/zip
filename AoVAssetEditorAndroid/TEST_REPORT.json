@@ -1,0 +1,28 @@
+{
+  "project_version": "0.2.0-alpha",
+  "android_apk_built": false,
+  "android_device_tested": false,
+  "python_compileall": "PASS",
+  "aes_cbc_known_answer_and_roundtrip": "PASS",
+  "png_writer_roundtrip": "PASS",
+  "gradlew_shell_syntax": "PASS",
+  "sm4_known_answer": "PASS",
+  "sample_bundle": {
+    "file": "593_machao_battle_base.assetbundle",
+    "read_back_object_count": 3752,
+    "material_count": 343,
+    "texture2d_count": 399,
+    "mesh_count": 159,
+    "mesh_obj_export": "PASS",
+    "astc_rgb_6x6_gpu_payload_export": "PASS",
+    "astc_rgb_6x6_opengl_internal_format": "0x93b4",
+    "material_rgba_write_and_readback": "PASS",
+    "material_float_write_and_readback": "PASS"
+  },
+  "limitations": [
+    "Android SDK, android.jar, sdkmanager and Gradle are absent; Kotlin/Android project was not compiled.",
+    "Android GPU texture preview has not been executed on a device.",
+    "Unity proprietary shaders, rigging, skinned animation, particle systems and full multi-material mesh preview are not reproduced.",
+    "Some game-specific typetrees and referenced objects remain unsupported or missing in parser output."
+  ]
+}

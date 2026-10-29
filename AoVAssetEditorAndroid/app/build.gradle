@@ -1,0 +1,21 @@
+plugins {
+    id 'com.android.application'
+    id 'com.chaquo.python'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.aov.asseteditor'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.aov.asseteditor'
+        minSdk 26
+        targetSdk 35
+        versionCode 2
+        versionName '0.2.0-alpha'
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
+        python { version '3.11' }
+    }
+}
+
+chaquopy { defaultConfig { pip { install 'lz4==4.3.3'; install 'brotli==1.1.0'; install 'Pillow==11.0.0' } } }
