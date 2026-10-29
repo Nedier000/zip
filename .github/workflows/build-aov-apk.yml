@@ -31,16 +31,20 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install Android SDK packages
+        shell: bash
         run: |
           set -euo pipefail
 
-          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
+            -type f -name sdkmanager | sort -V | tail -n 1)"
 
-          if [ ! -x "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found: $SDKMANAGER"
-            find "$ANDROID_HOME" -name sdkmanager -type f
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "ERROR: Cannot find sdkmanager"
+            find "$ANDROID_HOME" -name sdkmanager -type f || true
             exit 1
           fi
 
@@ -53,14 +57,15 @@ jobs:
 
       - name: Verify project files
         working-directory: AoVAssetEditorAndroid
+        shell: bash
         run: |
           set -euo pipefail
           ls -la
 
-          if [ ! -f gradlew ]; then
+          test -f gradlew || {
             echo "ERROR: gradlew not found"
             exit 1
-          fi
+          }
 
           if [ ! -f settings.gradle ] && \
              [ ! -f settings.gradle.kts ]; then
@@ -68,13 +73,14 @@ jobs:
             exit 1
           fi
 
-          if [ ! -d app ]; then
+          test -d app || {
             echo "ERROR: app module not found"
             exit 1
-          fi
+          }
 
       - name: Build debug APK
         working-directory: AoVAssetEditorAndroid
+        shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
@@ -87,4 +93,3 @@ jobs:
           path: AoVAssetEditorAndroid/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
-          
