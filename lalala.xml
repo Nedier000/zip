@@ -1,0 +1,32 @@
+<Track trackName="TCE_bluemsgsend_REMOTE"
+       eventType="InBattleMsgSendTick"
+       guid="9479a6c1-8c7e-4b21-a5d3-62e8f10c4301"
+       enabled="true"
+       useRefParam="false"
+       refParamName=""
+       r="0.000"
+       g="0.000"
+       b="0.000"
+       execOnForceStopped="false"
+       execOnActionCompleted="false"
+       stopAfterLastEvent="true">
+
+  <Event eventName="InBattleMsgSendTick"
+         time="0.000"
+         isDuration="false"
+         guid="b62f18a4-1d3e-4c90-8a71-53d920e64107">
+
+    <TemplateObject name="targetId"
+                    id="0"
+                    objectName="self"
+                    isTemp="false"
+                    refParamName=""
+                    useRefParam="false"/>
+
+    <String name="msgKey"
+            value="By TCE,DM Ios mod aov"
+            refParamName=""
+            useRefParam="false"/>
+
+  </Event>
+</Track>
