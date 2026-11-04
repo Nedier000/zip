@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+# Lightweight Gradle launcher for this source bundle. It downloads the official
+# Gradle distribution on first use because this environment cannot bundle the
+# standard wrapper JAR. Requires curl and unzip on Unix-like build hosts.
+set -eu
+VERSION="8.9"
+GH="${GRADLE_USER_HOME:-${HOME}/.gradle}/aov-wrapper"
+DIST="$GH/gradle-$VERSION"
+if [ ! -x "$DIST/bin/gradle" ]; then
+  command -v curl >/dev/null 2>&1 || { echo "curl is required to download Gradle $VERSION" >&2; exit 1; }
+  command -v unzip >/dev/null 2>&1 || { echo "unzip is required to install Gradle $VERSION" >&2; exit 1; }
+  mkdir -p "$GH"
+  TMP="$GH/gradle-$VERSION-bin.zip.part"
+  trap 'rm -f "$TMP"' EXIT HUP INT TERM
+  echo "Downloading official Gradle $VERSION distribution..."
+  curl --fail --location --retry 2 "https://services.gradle.org/distributions/gradle-$VERSION-bin.zip" --output "$TMP"
+  unzip -q -o "$TMP" -d "$GH"
+  rm -f "$TMP"
+  trap - EXIT HUP INT TERM
+fi
+exec "$DIST/bin/gradle" "$@"

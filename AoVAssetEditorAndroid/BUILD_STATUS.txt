@@ -1,0 +1,19 @@
+PROJECT: AoV / HOK Asset Editor Android Alpha 0.2
+DELIVERY: Android Studio source ZIP only; no APK compiled.
+
+VERIFIED IN THIS ENVIRONMENT:
+- Python compileall: PASS.
+- AES-CBC known-answer and round-trip test: PASS.
+- SM4 block known-answer test: PASS.
+- Sample bundle loaded: 3,752 total objects; 343 Material, 399 Texture2D, 159 Mesh.
+- Actual Mesh geometry exported to OBJ.
+- Actual ASTC_RGB_6x6 Texture2D payload exported for GPU preview; OpenGL internal format maps to 0x93B4.
+- One Material RGBA property and one Material float were written to copies, reopened, and read back with matching values.
+
+NOT VERIFIED:
+- Android/Kotlin build or APK signing (Android SDK, android.jar, sdkmanager and Gradle are absent here).
+- Runtime behavior on Android/GPU or in AoV/HOK game.
+- Unity-specific shader, rig/skinning, animation, particles, or all multi-material submeshes.
+- Some game-specific object typetrees and reference paths remain unreadable/missing in the sample.
+
+Do not claim this source project is a built or device-tested APK.
