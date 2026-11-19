@@ -43,11 +43,11 @@ jobs:
           s = p.read_text(encoding="utf-8")
           # Pin the Android API in the target framework itself. Setting
           # TargetPlatformVersion separately is overwritten by SDK inference.
-          s, n = re.subn(r"<TargetFramework>net8\\.0-android(?:[0-9.]+)?</TargetFramework>",
+          s, n = re.subn(r"<TargetFramework>net8\.0-android(?:[0-9.]+)?</TargetFramework>",
                          "<TargetFramework>net8.0-android35.0</TargetFramework>", s)
           if n == 0:
               s, n = re.subn(r"<TargetFrameworks>(.*?)</TargetFrameworks>",
-                             lambda m: "<TargetFrameworks>" + re.sub(r"net8\\.0-android(?:[0-9.]+)?",
+                             lambda m: "<TargetFrameworks>" + re.sub(r"net8\.0-android(?:[0-9.]+)?",
                              "net8.0-android35.0", m.group(1)) + "</TargetFrameworks>", s, flags=re.S)
           if n == 0 or "net8.0-android35.0" not in s:
               raise SystemExit("Could not set Android target framework to net8.0-android35.0")
