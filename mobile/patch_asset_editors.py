@@ -320,13 +320,15 @@ methods = r"""
             Toast.MakeText(this, "Chọn đúng 2 asset: một Material và một Texture2D.", ToastLength.Long)!.Show();
             return;
         }
-        var material = selected.Select(x => x.Instance).OfType<AssetStudio.Material>().SingleOrDefault();
-        var texture = selected.Select(x => x.Instance).OfType<AssetStudio.Texture2D>().SingleOrDefault();
-        if (material == null || texture == null)
+        var materials = selected.Select(x => x.Instance).OfType<AssetStudio.Material>().ToList();
+        var textures = selected.Select(x => x.Instance).OfType<AssetStudio.Texture2D>().ToList();
+        if (materials.Count != 1 || textures.Count != 1)
         {
             Toast.MakeText(this, "Lựa chọn phải gồm đúng một Material và một Texture2D.", ToastLength.Long)!.Show();
             return;
         }
+        var material = materials[0];
+        var texture = textures[0];
         if (assetOutputUri == null)
         {
             Toast.MakeText(this, "Chọn thư mục xuất asset trước.", ToastLength.Long)!.Show();
