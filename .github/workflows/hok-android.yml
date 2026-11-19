@@ -30,7 +30,7 @@ jobs:
           cat android_port_payload.b64.* | base64 -d > "$RUNNER_TEMP/hok_android_port_payload.tar.gz"
           tar -xzf "$RUNNER_TEMP/hok_android_port_payload.tar.gz" -C "$GITHUB_WORKSPACE"
 
-      - name: Resolve Android namespace and API ambiguities
+      - name: Audit restored Android source for remaining features\n        run: python3 mobile/diagnose_android_source.py\n\n      - name: Resolve Android namespace and API ambiguities
         shell: bash
         run: |
           set -euxo pipefail
