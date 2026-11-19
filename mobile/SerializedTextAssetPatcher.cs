@@ -74,10 +74,12 @@ public static class SerializedTextAssetPatcher
             Array.Reverse(lengthBytes);
         Buffer.BlockCopy(lengthBytes, 0, raw, checked((int)lengthOffset), 4);
 
-        // m_Script is the final TextAsset field. Zero-fill its old tail so no
-        // stale bytes remain while the serialized object size stays identical.
+        // Replace only the original m_Script payload. Preserve any trailing
+        // object bytes or game-specific extension data exactly as found.
         int dataStart = checked((int)dataOffset);
-        Array.Clear(raw, dataStart, raw.Length - dataStart);
+        if (oldLength > raw.Length - dataStart)
+            throw new InvalidDataException("m_Script vượt quá ranh giới object.");
+        Array.Clear(raw, dataStart, oldLength);
         if (newData.Length > 0)
             Buffer.BlockCopy(newData, 0, raw, dataStart, newData.Length);
 
