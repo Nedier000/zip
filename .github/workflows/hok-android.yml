@@ -71,12 +71,36 @@ jobs:
           s = s.replace("Resource.Attribute.", "global::Android.Resource.Attribute.")
           s = s.replace("Resource.Layout.", "global::Android.Resource.Layout.")
           s = s.replace("Android.global::Android.Resource.", "global::Android.Resource.")
+
+          # Button click helpers use Func<Task>; folder pick handlers are
+          # synchronous, so explicitly return a completed Task.
+          for code in ("PickDbInput", "PickDbOutput", "PickAssetInput", "PickAssetOutput"):
+              s = s.replace(f"() => PickFolder({code})",
+                            f"() => {{ PickFolder({code}); return Task.CompletedTask; }}")
+
+          # Android .NET bindings expose setters as methods rather than
+          # writable properties for these Java view attributes.
+          s = s.replace(", SingleLine = true", "")
+          if "searchBox.SetSingleLine(true);" not in s:
+              s = s.replace("searchBox = new EditText(this) { Hint = \"Tìm tên, PathID hoặc loại asset…\", TextSize = 13 };",
+                            "searchBox = new EditText(this) { Hint = \"Tìm tên, PathID hoặc loại asset…\", TextSize = 13 };\\n        searchBox.SetSingleLine(true);")
+          s = s.replace(", AllCaps = false", "")
+          s = s.replace("var clearVisible = new Button(this) { Text = \"BỎ CHỌN\", TextSize = 10 };",
+                        "var clearVisible = new Button(this) { Text = \"BỎ CHỌN\", TextSize = 10 };\\n        selectVisible.SetAllCaps(false);\\n        clearVisible.SetAllCaps(false);")
+          s = s.replace("var image = new ImageView(this) { AdjustViewBounds = true };",
+                        "var image = new ImageView(this);\\n                image.SetAdjustViewBounds(true);")
           p.write_text(s, encoding="utf-8")
 
           p = Path("mobile/Program.cs")
           s = p.read_text(encoding="utf-8").replace("Android.Util.", "global::Android.Util.")
           p.write_text(s, encoding="utf-8")
-          print("Applied Android namespace aliases and global-qualified framework references")
+
+          p = Path("mobile/DbIndexExtractor.cs")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          print("DbIndexExtractor source around compiler error:")
+          for i in range(250, min(270, len(lines))):
+              print(f"{i+1}: {lines[i]}")
+          print("Applied Android namespace and binding compatibility patches")
           PY
 
       - name: Dump failing source excerpts
