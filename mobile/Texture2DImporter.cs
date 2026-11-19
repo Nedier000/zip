@@ -18,7 +18,9 @@ public static class Texture2DImporter
         {
             TextureFormat.RGBA32 or TextureFormat.BGRA32 => 4,
             TextureFormat.RGB24 => 3,
-            _ => throw new NotSupportedException("Import PNG hiện hỗ trợ TextureFormat RGBA32, BGRA32 hoặc RGB24.")
+            TextureFormat.RGB565 or TextureFormat.ARGB4444 or TextureFormat.RGBA4444 => 2,
+            TextureFormat.Alpha8 => 1,
+            _ => throw new NotSupportedException("Import PNG chưa hỗ trợ định dạng nén GPU (ASTC/ETC/DXT/BC) hoặc định dạng khác.")
         };
         using Bitmap bitmap = BitmapFactory.DecodeFile(pngPath)
             ?? throw new InvalidDataException("Không đọc được PNG đầu vào.");
@@ -46,6 +48,25 @@ public static class Texture2DImporter
             else if (texture.m_TextureFormat == TextureFormat.BGRA32)
             {
                 replacement[p++] = b; replacement[p++] = g; replacement[p++] = r; replacement[p++] = a;
+            }
+            else if (texture.m_TextureFormat == TextureFormat.RGB565)
+            {
+                ushort packed = (ushort)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+                replacement[p++] = (byte)packed; replacement[p++] = (byte)(packed >> 8);
+            }
+            else if (texture.m_TextureFormat == TextureFormat.RGBA4444)
+            {
+                ushort packed = (ushort)(((r >> 4) << 12) | ((g >> 4) << 8) | ((b >> 4) << 4) | (a >> 4));
+                replacement[p++] = (byte)packed; replacement[p++] = (byte)(packed >> 8);
+            }
+            else if (texture.m_TextureFormat == TextureFormat.ARGB4444)
+            {
+                ushort packed = (ushort)(((a >> 4) << 12) | ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4));
+                replacement[p++] = (byte)packed; replacement[p++] = (byte)(packed >> 8);
+            }
+            else if (texture.m_TextureFormat == TextureFormat.Alpha8)
+            {
+                replacement[p++] = a;
             }
             else
             {
