@@ -37,39 +37,30 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          def insert_aliases(path, aliases):
+          def prepend_aliases(path, aliases):
               p = Path(path)
               if not p.is_file():
                   raise SystemExit(f"Missing source file: {path}")
               s = p.read_text(encoding="utf-8")
-              ns = s.find("namespace ")
-              if ns < 0:
-                  raise SystemExit(f"Namespace declaration not found: {path}")
-              head, tail = s[:ns], s[ns:]
-              for alias in aliases:
-                  name = alias.split("=", 1)[0].strip()
-                  if f"{name} =" not in head:
-                      head = head.rstrip() + chr(10) + alias + chr(10)
-              p.write_text(head + tail, encoding="utf-8")
+              for alias in reversed(aliases):
+                  if alias not in s:
+                      s = alias + chr(10) + s
+              p.write_text(s, encoding="utf-8")
 
-          insert_aliases("mobile/AssetBrowser.cs", [
+          prepend_aliases("mobile/AssetBrowser.cs", [
               "using Mesh = AssetStudio.Mesh;",
               "using Shader = AssetStudio.Shader;",
           ])
-          insert_aliases("mobile/SafTree.cs", [
+          prepend_aliases("mobile/SafTree.cs", [
               "using Uri = global::Android.Net.Uri;",
           ])
-
           p = Path("mobile/MainActivity.cs")
           s = p.read_text(encoding="utf-8")
-          ns = s.find("namespace ")
-          if ns < 0:
-              raise SystemExit("Namespace declaration not found: mobile/MainActivity.cs")
-          head, tail = s[:ns], s[ns:]
-          if "using Uri =" not in head:
-              head = head.rstrip() + chr(10) + "using Uri = global::Android.Net.Uri;" + chr(10)
-          tail = tail.replace("Android.Content.", "global::Android.Content.")
-          p.write_text(head + tail, encoding="utf-8")
+          alias = "using Uri = global::Android.Net.Uri;"
+          if alias not in s:
+              s = alias + chr(10) + s
+          s = s.replace("Android.Content.", "global::Android.Content.")
+          p.write_text(s, encoding="utf-8")
           print("Applied Android API aliases to AssetBrowser, SafTree, and MainActivity")
           PY
 
