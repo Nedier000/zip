@@ -14,7 +14,7 @@ elif new_const not in s:
 
 preview = '        AddButton(assetCard, "XEM ẢNH / THÔNG TIN ASSET ĐÃ CHỌN", "#E8EEF8", "#1E3A5F", () => { ShowSelectedAsset(); return Task.CompletedTask; });'
 buttons = preview + '''
-        AddButton(assetCard, "SỬA TEXTURE2D TỪ PNG (RGBA32 / RGB24 / BGRA32)", "#7C3AED", "#FFFFFF", () => { PickTextureImage(); return Task.CompletedTask; });
+        AddButton(assetCard, "SỬA TEXTURE2D TỪ PNG (ĐỊNH DẠNG UNCOMPRESSED)", "#7C3AED", "#FFFFFF", () => { PickTextureImage(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA SHADER SCRIPT (NẾU CÓ MÃ NGUỒN)", "#7C3AED", "#FFFFFF", () => { EditSelectedShader(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA MATERIAL FLOAT / COLOR", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterial(); return Task.CompletedTask; });
         AddButton(assetCard, "THAY AUDIOCLIP (CÙNG KÍCH THƯỚC / ĐỊNH DẠNG)", "#7C3AED", "#FFFFFF", () => { PickAudioFile(); return Task.CompletedTask; });'''
@@ -83,7 +83,7 @@ methods = r"""
             await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
                 new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất Texture2D {p.done}: {p.name}")), token);
             WriteStatus("Đã tạo bản Texture2D đã sửa: " + Path.GetFileName(written) +
-                ". Chỉ hỗ trợ PNG cùng kích thước, texture inline RGBA32/RGB24/BGRA32, không mipmap; file gốc được giữ nguyên.");
+                ". Chỉ hỗ trợ PNG cùng kích thước, texture inline RGBA32/RGB24/BGRA32/ARGB32/RGB565/ARGB4444/RGBA4444/Alpha8, không mipmap; file gốc được giữ nguyên.");
         });
     }
 
