@@ -20,6 +20,7 @@ buttons = preview + '''
         AddButton(assetCard, "SỬA SHADER SCRIPT (NẾU CÓ MÃ NGUỒN)", "#7C3AED", "#FFFFFF", () => { EditSelectedShader(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA MATERIAL FLOAT / COLOR", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterial(); return Task.CompletedTask; });
         AddButton(assetCard, "ĐỔI TEXTURE SLOT CỦA MATERIAL", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterialTextureSlot(); return Task.CompletedTask; });
+        AddButton(assetCard, "GÁN SHADER CHO MATERIAL", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterialShader(); return Task.CompletedTask; });
         AddButton(assetCard, "THAY AUDIOCLIP (CÙNG KÍCH THƯỚC / ĐỊNH DẠNG)", "#7C3AED", "#FFFFFF", () => { PickAudioFile(); return Task.CompletedTask; });'''
 if 'PickTextureImage(); return Task.CompletedTask;' not in s:
     if s.count(preview) != 1:
@@ -311,6 +312,56 @@ methods = r"""
         });
     }
 
+
+
+    private void EditSelectedMaterialShader()
+    {
+        var selected = GetSelectedAssets();
+        if (selected.Count != 2)
+        {
+            Toast.MakeText(this, "Chọn đúng 2 asset: một Material và một Shader.", ToastLength.Long)!.Show();
+            return;
+        }
+        var materials = selected.Select(x => x.Instance).OfType<AssetStudio.Material>().ToList();
+        var shaders = selected.Select(x => x.Instance).OfType<AssetStudio.Shader>().ToList();
+        if (materials.Count != 1 || shaders.Count != 1)
+        {
+            Toast.MakeText(this, "Lựa chọn phải gồm đúng một Material và một Shader.", ToastLength.Long)!.Show();
+            return;
+        }
+        if (assetOutputUri == null)
+        {
+            Toast.MakeText(this, "Chọn thư mục xuất asset trước.", ToastLength.Long)!.Show();
+            return;
+        }
+        var material = materials[0];
+        var shader = shaders[0];
+        new AlertDialog.Builder(this)
+            .SetTitle("Gán Shader cho Material")
+            .SetMessage("Material: " + material.m_Name + "\nShader đích: " + shader.m_Name +
+                "\nChỉ đổi PPtr shader đã tồn tại và yêu cầu cùng SerializedFile. Không sửa compiled shader code.")
+            .SetNegativeButton("HỦY", (_, _) => { })
+            .SetPositiveButton("GÁN SHADER", async (_, _) =>
+                await SaveMaterialShaderEditAsync(material, shader))
+            .Show();
+    }
+
+    private async Task SaveMaterialShaderEditAsync(AssetStudio.Material material, AssetStudio.Shader shader)
+    {
+        await RunBusyAsync(async token =>
+        {
+            string parent = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "material_shader_edits");
+            Directory.CreateDirectory(parent);
+            string output = Path.Combine(parent, "Edited_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss"));
+            Directory.CreateDirectory(output);
+            string written = await Task.Run(
+                () => MaterialTextureSlotPatcher.CreateShaderPatchedCopy(material, shader, output), token);
+            await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
+                new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất Material shader {p.done}: {p.name}")), token);
+            WriteStatus("Đã gán Shader '" + shader.m_Name + "' vào Material '" + material.m_Name +
+                "' trong bản mới: " + Path.GetFileName(written) + ". File gốc không đổi.");
+        });
+    }
 
     private void EditSelectedMaterialTextureSlot()
     {
