@@ -216,10 +216,28 @@ jobs:
             -p:AndroidSigningKeyPass=android \
             -p:AndroidSigningStorePass=android
           mkdir -p dist
-          mapfile -t APKS < <(find mobile/bin/Release -type f -name '*.apk' -print)
-          test "${#APKS[@]}" -eq 1
-          cp "${APKS[0]}" dist/HoK-Tool-Android-arm64.apk
+          mapfile -t CANDIDATES < <(find mobile/bin/Release -type f -name '*.apk' -print | sort)
+          printf 'APK candidates found: %s\\n' "${#CANDIDATES[@]}"
+          printf '%s\\n' "${CANDIDATES[@]}"
+          test "${#CANDIDATES[@]}" -gt 0
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner"
+          declare -A VERIFIED_BY_HASH=()
+          for apk in "${CANDIDATES[@]}"; do
+            if "$APKSIGNER" verify "$apk" >/dev/null 2>&1; then
+              digest="$(sha256sum "$apk" | awk '{print $1}')"
+              VERIFIED_BY_HASH["$digest"]="$apk"
+            fi
+          done
+          mapfile -t VERIFIED_APKS < <(for apk in "${VERIFIED_BY_HASH[@]}"; do printf '%s\\n' "$apk"; done | sort)
+          if [ "${#VERIFIED_APKS[@]}" -ne 1 ]; then
+            echo "Expected one unique signed ARM64 APK; found ${#VERIFIED_APKS[@]}."
+            echo "Unsigned and signed APK candidate list:"
+            printf '%s\\n' "${CANDIDATES[@]}"
+            exit 1
+          fi
+          cp "${VERIFIED_APKS[0]}" dist/HoK-Tool-Android-arm64.apk
           test -s dist/HoK-Tool-Android-arm64.apk
+          "$APKSIGNER" verify --verbose dist/HoK-Tool-Android-arm64.apk
           sha256sum dist/HoK-Tool-Android-arm64.apk | tee dist/SHA256SUMS.txt
 
       - name: Package corresponding source and licenses
