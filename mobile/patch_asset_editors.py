@@ -19,6 +19,7 @@ buttons = preview + '''
         AddButton(assetCard, "NHẬP OBJ (CHỈ SỬA VỊ TRÍ VERTEX)", "#7C3AED", "#FFFFFF", () => { PickMeshObj(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA SHADER SCRIPT (NẾU CÓ MÃ NGUỒN)", "#7C3AED", "#FFFFFF", () => { EditSelectedShader(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA MATERIAL FLOAT / COLOR", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterial(); return Task.CompletedTask; });
+        AddButton(assetCard, "ĐỔI TEXTURE SLOT CỦA MATERIAL", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterialTextureSlot(); return Task.CompletedTask; });
         AddButton(assetCard, "THAY AUDIOCLIP (CÙNG KÍCH THƯỚC / ĐỊNH DẠNG)", "#7C3AED", "#FFFFFF", () => { PickAudioFile(); return Task.CompletedTask; });'''
 if 'PickTextureImage(); return Task.CompletedTask;' not in s:
     if s.count(preview) != 1:
@@ -307,6 +308,65 @@ methods = r"""
                 new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất AudioClip {p.done}: {p.name}")), token);
             WriteStatus("Đã tạo bản AudioClip đã sửa: " + Path.GetFileName(written) +
                 ". Chỉ hỗ trợ dữ liệu inline, cùng kích thước và cùng định dạng OGG/FSB5/RIFF/MP3/MP4; file gốc được giữ nguyên.");
+        });
+    }
+
+
+    private void EditSelectedMaterialTextureSlot()
+    {
+        var selected = GetSelectedAssets();
+        if (selected.Count != 2)
+        {
+            Toast.MakeText(this, "Chọn đúng 2 asset: một Material và một Texture2D.", ToastLength.Long)!.Show();
+            return;
+        }
+        var material = selected.Select(x => x.Instance).OfType<AssetStudio.Material>().SingleOrDefault();
+        var texture = selected.Select(x => x.Instance).OfType<AssetStudio.Texture2D>().SingleOrDefault();
+        if (material == null || texture == null)
+        {
+            Toast.MakeText(this, "Lựa chọn phải gồm đúng một Material và một Texture2D.", ToastLength.Long)!.Show();
+            return;
+        }
+        if (assetOutputUri == null)
+        {
+            Toast.MakeText(this, "Chọn thư mục xuất asset trước.", ToastLength.Long)!.Show();
+            return;
+        }
+        var properties = material.m_SavedProperties.m_TexEnvs.Select(x => x.Key).Distinct().ToList();
+        if (properties.Count == 0)
+        {
+            Toast.MakeText(this, "Material không có texture slot đã lưu.", ToastLength.Long)!.Show();
+            return;
+        }
+        var spinner = new Spinner(this);
+        var adapter = new ArrayAdapter<string>(this, Android.Resource.Layout.SimpleSpinnerItem, properties);
+        adapter.SetDropDownViewResource(Android.Resource.Layout.SimpleSpinnerDropDownItem);
+        spinner.Adapter = adapter;
+        new AlertDialog.Builder(this)
+            .SetTitle("Chọn texture slot · " + material.m_Name)
+            .SetMessage("Texture đích: " + texture.m_Name + ". Chỉ đổi PPtr của slot đã tồn tại; Material và Texture phải cùng SerializedFile.")
+            .SetView(spinner)
+            .SetNegativeButton("HỦY", (_, _) => { })
+            .SetPositiveButton("GÁN TEXTURE", async (_, _) =>
+                await SaveMaterialTextureSlotEditAsync(material, spinner.SelectedItem?.ToString() ?? string.Empty, texture))
+            .Show();
+    }
+
+    private async Task SaveMaterialTextureSlotEditAsync(
+        AssetStudio.Material material, string propertyName, AssetStudio.Texture2D texture)
+    {
+        await RunBusyAsync(async token =>
+        {
+            string parent = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "material_texture_edits");
+            Directory.CreateDirectory(parent);
+            string output = Path.Combine(parent, "Edited_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss"));
+            Directory.CreateDirectory(output);
+            string written = await Task.Run(
+                () => MaterialTextureSlotPatcher.CreatePatchedCopy(material, propertyName, texture, output), token);
+            await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
+                new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất Material texture {p.done}: {p.name}")), token);
+            WriteStatus("Đã gán texture '" + texture.m_Name + "' vào slot '" + propertyName +
+                "' trong bản Material mới: " + Path.GetFileName(written) + ". File gốc không đổi.");
         });
     }
 
