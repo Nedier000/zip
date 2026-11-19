@@ -44,7 +44,7 @@ public static class UnityFsTextAssetRepacker
         string outputPath = Path.Combine(outputDirectory, baseName + ".edited." + stamp + extension);
         string dataTempPath = outputPath + ".data.tmp";
 
-        var game = GameManager.GetGame(GameType.HonorOfKings);
+        var game = asset.reader.Game ?? GameManager.GetGame(GameType.HonorOfKings);
         BundleFile bundle;
         using (var sourceReader = new FileReader(bundlePath))
         {
@@ -57,8 +57,11 @@ public static class UnityFsTextAssetRepacker
             throw new NotSupportedException("Chỉ hỗ trợ UnityFS chuẩn; UnityWeb/UnityRaw/ENCR không được ghi ngược bằng chế độ này.");
         if (bundle.m_Header.version < 6 || bundle.m_Header.version > 7)
             throw new NotSupportedException($"UnityFS version {bundle.m_Header.version} chưa được xác nhận cho repack.");
+        uint knownHeaderFlags = 0x7FF;
+        if ((((uint)bundle.m_Header.flags) & ~knownHeaderFlags) != 0)
+            throw new NotSupportedException("UnityFS chứa header flag chưa được hỗ trợ; từ chối thay đổi container.");
         if ((bundle.m_Header.flags & ArchiveFlags.UnityCNEncryption) != 0)
-            throw new NotSupportedException("Bundle có cờ UnityCNEncryption; không ghi lại container mã hóa.");
+            throw new NotSupportedException("Bundle có cờ UnityCNEncryption; không ghi lại container.");
 
         var matches = bundle.fileList
             .Where(f => string.Equals(f.fileName, asset.assetsFile.fileName, StringComparison.OrdinalIgnoreCase))
@@ -76,6 +79,8 @@ public static class UnityFsTextAssetRepacker
 
         var targetEntry = matches[0];
         long objectOffset = asset.reader.byteStart;
+        if (!targetEntry.stream.CanWrite)
+            throw new NotSupportedException("SerializedFile entry trong UnityFS không cho phép ghi.");
         if (objectOffset < 0 || objectOffset + originalObjectBytes.Length > targetEntry.stream.Length)
             throw new InvalidDataException("Object offset nằm ngoài SerializedFile trong UnityFS.");
 
@@ -104,6 +109,8 @@ public static class UnityFsTextAssetRepacker
                         throw new NotSupportedException("Một entry trong bundle không thể đọc tuần tự; không tạo bundle thiếu dữ liệu.");
 
                     long size = file.stream.Length;
+                    if (size != originalNode.size)
+                        throw new InvalidDataException($"Kích thước entry {i} khác directory table gốc.");
                     if (size < 0 || dataLength > MaximumBundleDataBytes - size)
                         throw new NotSupportedException("Dữ liệu giải nén của bundle vượt giới hạn an toàn 1 GiB cho thao tác repack Android.");
                     if (dataLength > uint.MaxValue - size)
@@ -179,7 +186,9 @@ public static class UnityFsTextAssetRepacker
 
     private static void WriteUnityFs(string outputPath, BundleFile.Header originalHeader, byte[] blocksInfo, Stream dataFile)
     {
-        const ArchiveFlags outputFlags = ArchiveFlags.BlocksAndDirectoryInfoCombined;
+        ArchiveFlags outputFlags =
+            ArchiveFlags.BlocksAndDirectoryInfoCombined |
+            (originalHeader.flags & ArchiveFlags.OldWebPluginCompatibility);
         using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1024 * 1024, FileOptions.SequentialScan);
         using var writer = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true);
 
