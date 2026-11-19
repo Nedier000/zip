@@ -13,7 +13,7 @@ public static class AudioClipPatcher
         if (audio == null) throw new ArgumentNullException(nameof(audio));
         byte[] original = audio.m_AudioData?.GetData() ?? Array.Empty<byte>();
         if (original.Length == 0 || original.LongLength != audio.m_Size)
-            throw new InvalidDataException("Kích thước AudioClip inline không hợp lệ.");
+            throw new InvalidDataException("Kích thước AudioClip payload không hợp lệ.");
         byte[] replacement = File.ReadAllBytes(replacementPath);
         if (replacement.Length != original.Length)
             throw new InvalidDataException($"Audio thay thế phải cùng kích thước: cần {original.Length} byte, nhận {replacement.Length} byte.");
@@ -39,7 +39,7 @@ public static class AudioClipPatcher
             throw new NotSupportedException("External AudioClip trong UnityFS/virtual bundle chưa được ghi trực tiếp; chỉ hỗ trợ SerializedFile độc lập có .resS bên ngoài.");
 
         string directory = Path.GetDirectoryName(Path.GetFullPath(serializedPath))!;
-        string resourceName = Path.GetFileName(audio.m_Source);
+        string resourceName = Path.GetFileName(audio.m_Source.Replace('\\\\', '/'));
         if (string.IsNullOrWhiteSpace(resourceName))
             throw new InvalidDataException("AudioClip external resource không có tên file hợp lệ.");
         var matches = Directory.GetFiles(directory, resourceName, SearchOption.AllDirectories);
