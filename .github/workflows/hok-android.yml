@@ -88,11 +88,11 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          dotnet restore mobile/HOKTool.Android.csproj -p:CheckEolWorkloads=false -p:CheckEolTargetFramework=false
+          dotnet restore mobile/HOKTool.Android.csproj -p:CheckEolWorkloads=false -p:CheckEolTargetFramework=false -p:TargetPlatformVersion=35.0
           dotnet publish mobile/HOKTool.Android.csproj \
             -c Release -f net8.0-android -r android-arm64 --self-contained true \
             -p:AndroidPackageFormat=apk \
-            -p:CheckEolWorkloads=false -p:CheckEolTargetFramework=false \
+            -p:CheckEolWorkloads=false -p:CheckEolTargetFramework=false -p:TargetPlatformVersion=35.0 \
             -p:AndroidKeyStore=true \
             -p:AndroidSigningKeyStore="$RUNNER_TEMP/hoktool.keystore" \
             -p:AndroidSigningKeyAlias=hoktool \
