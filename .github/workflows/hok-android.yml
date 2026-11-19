@@ -96,11 +96,15 @@ jobs:
           p.write_text(s, encoding="utf-8")
 
           p = Path("mobile/DbIndexExtractor.cs")
-          lines = p.read_text(encoding="utf-8").splitlines()
-          print("DbIndexExtractor source around compiler error:")
-          for i in range(250, min(270, len(lines))):
-              print(f"{i+1}: {lines[i]}")
-          print("Applied Android namespace and binding compatibility patches")
+          db = p.read_text(encoding="utf-8")
+          old = "byte[] result = dec.Unwrap(src);"
+          new = "byte[] result = dec.Unwrap(src).ToArray();"
+          if old in db:
+              db = db.replace(old, new, 1)
+          elif new not in db:
+              raise SystemExit("Could not locate Zstd Unwrap result assignment")
+          p.write_text(db, encoding="utf-8")
+          print("Fixed Zstd Unwrap Span<byte> to byte[] conversion")
           PY
 
       - name: Dump failing source excerpts
