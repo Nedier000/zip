@@ -6,7 +6,7 @@ if not p.is_file():
 s = p.read_text(encoding="utf-8")
 
 old_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004;"
-new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImageRequest = 1005, PickAudioFileRequest = 1006;"
+new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImageRequest = 1005, PickAudioFileRequest = 1006, PickTextureRawRequest = 1007;"
 if old_const in s:
     s = s.replace(old_const, new_const, 1)
 elif new_const not in s:
@@ -15,6 +15,7 @@ elif new_const not in s:
 preview = '        AddButton(assetCard, "XEM ẢNH / THÔNG TIN ASSET ĐÃ CHỌN", "#E8EEF8", "#1E3A5F", () => { ShowSelectedAsset(); return Task.CompletedTask; });'
 buttons = preview + '''
         AddButton(assetCard, "SỬA TEXTURE2D TỪ PNG (ĐỊNH DẠNG UNCOMPRESSED)", "#7C3AED", "#FFFFFF", () => { PickTextureImage(); return Task.CompletedTask; });
+        AddButton(assetCard, "THAY TEXTURE RAW (HỖ TRỢ ASTC / ETC / DXT)", "#7C3AED", "#FFFFFF", () => { PickTextureRaw(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA SHADER SCRIPT (NẾU CÓ MÃ NGUỒN)", "#7C3AED", "#FFFFFF", () => { EditSelectedShader(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA MATERIAL FLOAT / COLOR", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterial(); return Task.CompletedTask; });
         AddButton(assetCard, "THAY AUDIOCLIP (CÙNG KÍCH THƯỚC / ĐỊNH DẠNG)", "#7C3AED", "#FFFFFF", () => { PickAudioFile(); return Task.CompletedTask; });'''
@@ -26,6 +27,7 @@ if 'PickTextureImage(); return Task.CompletedTask;' not in s:
 switch_anchor = '            case PickAssetOutput: assetOutputUri = uri; assetOutputText!.Text = "Đích: " + uri.LastPathSegment; break;'
 switch_case = switch_anchor + '''
             case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;
+            case PickTextureRawRequest: _ = ReplaceSelectedTextureRawAsync(uri); break;
             case PickAudioFileRequest: _ = ReplaceSelectedAudioAsync(uri); break;'''
 if "case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;" not in s:
     if s.count(switch_anchor) != 1:
@@ -34,6 +36,61 @@ if "case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;" 
 
 method_anchor = "    private void ShowSelectedAsset()"
 methods = r"""
+
+    private void PickTextureRaw()
+    {
+        var selected = GetSelectedAssets();
+        if (selected.Count != 1 || selected[0].Instance is not AssetStudio.Texture2D)
+        {
+            Toast.MakeText(this, "Chọn đúng một Texture2D trước khi nhập raw.", ToastLength.Long)!.Show();
+            return;
+        }
+        if (assetOutputUri == null)
+        {
+            Toast.MakeText(this, "Chọn thư mục xuất asset trước.", ToastLength.Long)!.Show();
+            return;
+        }
+        var intent = new Intent(Intent.ActionOpenDocument);
+        intent.AddCategory(Intent.CategoryOpenable);
+        intent.SetType("*/*");
+        intent.AddFlags(ActivityFlags.GrantReadUriPermission | ActivityFlags.GrantPersistableUriPermission);
+        StartActivityForResult(intent, PickTextureRawRequest);
+    }
+
+    private async Task ReplaceSelectedTextureRawAsync(Uri rawUri)
+    {
+        var selected = GetSelectedAssets();
+        if (selected.Count != 1 || selected[0].Instance is not AssetStudio.Texture2D texture)
+        {
+            Toast.MakeText(this, "Texture2D đã chọn không còn hợp lệ.", ToastLength.Long)!.Show();
+            return;
+        }
+        if (assetOutputUri == null) return;
+        await RunBusyAsync(async token =>
+        {
+            string work = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "texture_raw_import");
+            Directory.CreateDirectory(work);
+            string input = Path.Combine(work, "replacement.texture.raw");
+            using (var source = ContentResolver!.OpenInputStream(rawUri)
+                ?? throw new IOException("Không mở được raw texture từ trình quản lý tệp."))
+            await using (var destination = new FileStream(input, FileMode.Create, FileAccess.Write, FileShare.None))
+                await source.CopyToAsync(destination, 1024 * 1024, token);
+            var info = new FileInfo(input);
+            long expected = texture.image_data?.Size ?? 0;
+            if (info.Length == 0 || info.Length != expected)
+                throw new InvalidDataException($"Raw texture phải đúng {expected} byte; nhận {info.Length} byte.");
+            string output = Path.Combine(work, "patched");
+            if (Directory.Exists(output)) Directory.Delete(output, true);
+            Directory.CreateDirectory(output);
+            string written = await Task.Run(
+                () => Texture2DRawImporter.CreatePatchedCopy(texture, input, output), token);
+            await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
+                new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất raw Texture2D {p.done}: {p.name}")), token);
+            WriteStatus("Đã thay raw Texture2D: " + Path.GetFileName(written) +
+                ". Hỗ trợ payload nén ASTC/ETC/DXT hoặc định dạng khác nếu raw đã mã hóa đúng định dạng và đúng kích thước; file .resS ngoài chưa hỗ trợ.");
+        });
+    }
+
     private void PickTextureImage()
     {
         var selected = GetSelectedAssets();
