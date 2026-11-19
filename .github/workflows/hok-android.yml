@@ -70,6 +70,7 @@ jobs:
           s = s.replace("Android.Content.", "global::Android.Content.")
           s = s.replace("Resource.Attribute.", "global::Android.Resource.Attribute.")
           s = s.replace("Resource.Layout.", "global::Android.Resource.Layout.")
+          s = s.replace("Android.global::Android.Resource.", "global::Android.Resource.")
           p.write_text(s, encoding="utf-8")
 
           p = Path("mobile/Program.cs")
