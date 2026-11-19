@@ -392,8 +392,8 @@ methods = r"""
             return;
         }
         var spinner = new Spinner(this);
-        var adapter = new ArrayAdapter<string>(this, Android.Resource.Layout.SimpleSpinnerItem, properties);
-        adapter.SetDropDownViewResource(Android.Resource.Layout.SimpleSpinnerDropDownItem);
+        var adapter = new ArrayAdapter<string>(this, global::Android.Resource.Layout.SimpleSpinnerItem, properties);
+        adapter.SetDropDownViewResource(global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
         spinner.Adapter = adapter;
         new AlertDialog.Builder(this)
             .SetTitle("Chọn texture slot · " + material.m_Name)
