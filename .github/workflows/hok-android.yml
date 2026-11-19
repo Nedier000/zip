@@ -55,6 +55,8 @@ jobs:
           p.write_text(s, encoding="utf-8")
           print("Configured app-only TargetPlatformVersion=35.0")
           PY
+          echo "=== Android project platform properties ==="
+          grep -n -E 'TargetFramework|TargetPlatformVersion|SupportedOSPlatformVersion' mobile/HOKTool.Android.csproj || true
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
