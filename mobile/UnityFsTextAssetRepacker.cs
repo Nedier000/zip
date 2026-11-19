@@ -1,3 +1,4 @@
+using GameManager = AssetStudio.GameManager;
 using System;
 using System.Collections.Generic;
 using System.IO;
