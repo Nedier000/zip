@@ -22,7 +22,7 @@ public static class UnityFsTextAssetRepacker
     private sealed record OutputNode(long Offset, long Size, uint Flags, string Path);
 
     public static string CreatePatchedBundleCopy(
-        TextAsset asset,
+        AssetStudio.Object asset,
         byte[] originalObjectBytes,
         byte[] patchedObjectBytes,
         string outputDirectory)
