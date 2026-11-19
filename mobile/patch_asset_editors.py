@@ -6,7 +6,7 @@ if not p.is_file():
 s = p.read_text(encoding="utf-8")
 
 old_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004;"
-new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImageRequest = 1005;"
+new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImageRequest = 1005, PickAudioFileRequest = 1006;"
 if old_const in s:
     s = s.replace(old_const, new_const, 1)
 elif new_const not in s:
@@ -16,7 +16,8 @@ preview = '        AddButton(assetCard, "XEM ẢNH / THÔNG TIN ASSET ĐÃ CHỌ
 buttons = preview + '''
         AddButton(assetCard, "SỬA TEXTURE2D TỪ PNG (RGBA32 / RGB24 / BGRA32)", "#7C3AED", "#FFFFFF", () => { PickTextureImage(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA SHADER SCRIPT (NẾU CÓ MÃ NGUỒN)", "#7C3AED", "#FFFFFF", () => { EditSelectedShader(); return Task.CompletedTask; });
-        AddButton(assetCard, "SỬA MATERIAL FLOAT / COLOR", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterial(); return Task.CompletedTask; });'''
+        AddButton(assetCard, "SỬA MATERIAL FLOAT / COLOR", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterial(); return Task.CompletedTask; });
+        AddButton(assetCard, "THAY AUDIOCLIP (CÙNG KÍCH THƯỚC / ĐỊNH DẠNG)", "#7C3AED", "#FFFFFF", () => { PickAudioFile(); return Task.CompletedTask; });'''
 if 'PickTextureImage(); return Task.CompletedTask;' not in s:
     if s.count(preview) != 1:
         raise SystemExit("Could not uniquely locate asset preview action")
@@ -24,7 +25,8 @@ if 'PickTextureImage(); return Task.CompletedTask;' not in s:
 
 switch_anchor = '            case PickAssetOutput: assetOutputUri = uri; assetOutputText!.Text = "Đích: " + uri.LastPathSegment; break;'
 switch_case = switch_anchor + '''
-            case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;'''
+            case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;
+            case PickAudioFileRequest: _ = ReplaceSelectedAudioAsync(uri); break;'''
 if "case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;" not in s:
     if s.count(switch_anchor) != 1:
         raise SystemExit("Could not uniquely locate OnActivityResult switch")
@@ -140,6 +142,59 @@ methods = r"""
                 new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất Shader {p.done}: {p.name}")), token);
             WriteStatus("Đã tạo bản Shader script đã sửa: " + Path.GetFileName(written) +
                 ". Chỉ hỗ trợ m_Script UTF-8 inline, không lớn hơn dữ liệu gốc; compiled blob được giữ nguyên.");
+        });
+    }
+
+
+    private void PickAudioFile()
+    {
+        var selected = GetSelectedAssets();
+        if (selected.Count != 1 || selected[0].Instance is not AssetStudio.AudioClip)
+        {
+            Toast.MakeText(this, "Chọn đúng một AudioClip trước khi thay âm thanh.", ToastLength.Long)!.Show();
+            return;
+        }
+        if (assetOutputUri == null)
+        {
+            Toast.MakeText(this, "Chọn thư mục xuất asset trước.", ToastLength.Long)!.Show();
+            return;
+        }
+        var intent = new Intent(Intent.ActionOpenDocument);
+        intent.AddCategory(Intent.CategoryOpenable);
+        intent.SetType("audio/*");
+        intent.AddFlags(ActivityFlags.GrantReadUriPermission | ActivityFlags.GrantPersistableUriPermission);
+        StartActivityForResult(intent, PickAudioFileRequest);
+    }
+
+    private async Task ReplaceSelectedAudioAsync(Uri audioUri)
+    {
+        var selected = GetSelectedAssets();
+        if (selected.Count != 1 || selected[0].Instance is not AssetStudio.AudioClip audio)
+        {
+            Toast.MakeText(this, "AudioClip đã chọn không còn hợp lệ.", ToastLength.Long)!.Show();
+            return;
+        }
+        if (assetOutputUri == null) return;
+        await RunBusyAsync(async token =>
+        {
+            string work = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "audio_import");
+            Directory.CreateDirectory(work);
+            string input = Path.Combine(work, "replacement.audio");
+            using (var source = ContentResolver!.OpenInputStream(audioUri)
+                ?? throw new IOException("Không mở được audio từ trình quản lý tệp."))
+            await using (var destination = new FileStream(input, FileMode.Create, FileAccess.Write, FileShare.None))
+                await source.CopyToAsync(destination, 1024 * 1024, token);
+            var info = new FileInfo(input);
+            if (info.Length == 0 || info.Length > 128L * 1024 * 1024)
+                throw new InvalidDataException("Audio rỗng hoặc vượt giới hạn 128 MiB.");
+            string output = Path.Combine(work, "patched");
+            if (Directory.Exists(output)) Directory.Delete(output, true);
+            Directory.CreateDirectory(output);
+            string written = await Task.Run(() => AudioClipPatcher.CreatePatchedCopy(audio, input, output), token);
+            await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
+                new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất AudioClip {p.done}: {p.name}")), token);
+            WriteStatus("Đã tạo bản AudioClip đã sửa: " + Path.GetFileName(written) +
+                ". Chỉ hỗ trợ dữ liệu inline, cùng kích thước và cùng định dạng OGG/FSB5/RIFF/MP3/MP4; file gốc được giữ nguyên.");
         });
     }
 
