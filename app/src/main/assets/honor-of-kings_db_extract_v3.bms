@@ -1,1 +1,196 @@
-QuickBMS script source is included in the source package supplied in this conversation.
+# script for extracting db files from Honor of Kings
+# use it on pak files without additional suffixes (.db and not _x.db)
+# created by spiritovod
+
+quickbmsver "0.12"
+callfunction QUICKBMS_4GB_CHECK 1
+math SKIP_DUMMY_BLOCKS = 1
+
+get SIGN long
+if SIGN != 0x02000001
+	print "This is not valid index file"
+	cleanexit
+endif
+
+get ARCHIVE basename
+string DATA_ARCHIVE p "%s_0.db" ARCHIVE
+open FDSE DATA_ARCHIVE 1 EXIST
+if EXIST = 0
+	print "There is no data file %DATA_ARCHIVE% in the same folder"
+	cleanexit
+else
+	math FILE = 1
+endif
+
+math BASE_OFF = 0x01A630
+math BLOCK = 0x1000
+math VFS_COUNT = 10
+math DATA_OFFSET = BASE_OFF
+for i = 0 < VFS_COUNT
+	putarray 0 i DATA_OFFSET
+next i
+
+goto BASE_OFF
+get FSIZE asize
+math j = 0
+string OPENED_ARCHIVE = ""
+for CUR_OFFSET = CUR_OFFSET < FSIZE
+	get ENTRY_OFFSET long
+	get TYPE long
+	if TYPE = 0
+		cleanexit
+	endif
+	get ENTRY_SIZE long
+	get HASH longlong
+	get VERSION long
+	get ENTRY_TYPE long
+	get ENTRY long
+	if ENTRY = 0xC || ENTRY = 1
+		continue NEXT_ENTRY
+	endif
+	getdstring SIGN 4
+	if SIGN = "QTSF"
+		get HASH1 long
+		get OFFSET1 long
+		get HASH2 longlong
+		get NAMEZ long
+		getdstring NAME NAMEZ
+		padding 4
+		get FULLSIZE long
+		get ARCHIVE_NUM long
+		string NAME p "%s/%s" ARCHIVE NAME
+		callfunction extract_single 1
+	else
+		get HASH1 longlong
+		get FULLSIZE longlong
+		getdstring GUID 16
+		get SUB_FILES long
+		if SUB_FILES = 0 || SUB_FILES > 2
+			if SUB_FILES > 2
+				print "\nThis asset has more than 2 files."
+			endif
+			cleanexit
+		endif
+		get ARCHIVE_NUM long
+		math TMP_SIZE = FULLSIZE
+		for x = 0 < SUB_FILES
+			get COMP short
+			get FLAG short
+			get CHUNK_SIZE long
+			if SUB_FILES > 1 && x = 0
+				get FIRST_SIZE long
+				math FULLSIZE = FIRST_SIZE
+			elif SUB_FILES > 1
+				math TMP_SIZE - FIRST_SIZE
+				math FULLSIZE = TMP_SIZE
+			endif
+			if x = 0
+				string NAME p "%s/%08d.assets" ARCHIVE j
+			else
+				string NAME p "%s/%08d.assets.resS" ARCHIVE j
+			endif
+			if SUB_FILES = 1 || x > 0
+				math j + 1
+			endif
+			callfunction extract_single 1
+		next x
+		get HASH1 longlong
+	endif
+	label NEXT_ENTRY
+	open 0
+	putarray 0 ARCHIVE_NUM DATA_OFFSET
+	do
+		savepos CUR_OFFSET
+		math TMP_OFF = CUR_OFFSET
+		math TMP_OFF + 4
+		if TMP_OFF >= FSIZE
+			print "\nAll files are extracted."
+			cleanexit
+		endif
+		get ENTRY_OFFSET long
+	while CUR_OFFSET != ENTRY_OFFSET
+	goto CUR_OFFSET
+next
+
+startfunction QUICKBMS_4GB_CHECK
+	math TMP64 = 0x10000000
+	math TMP64 * 16
+	if TMP64 == 0
+		print "You must use quickbms_4gb_files.exe with this script!"
+		cleanexit
+	endif
+endfunction
+
+startfunction extract_single
+	string ARCHIVE_NAME p "%s_%d.db" ARCHIVE ARCHIVE_NUM
+	if ARCHIVE_NAME != OPENED_ARCHIVE
+		open FDSE ARCHIVE_NAME FILE EXISTS
+		if EXISTS = 0
+			print "File %ARCHIVE_NAME% doesn't exist! Skipping..."
+			continue
+		endif
+		string OPENED_ARCHIVE = ARCHIVE_NAME
+		getarray DATA_OFFSET 0 ARCHIVE_NUM
+	endif
+	open FILE
+	get ARCHIVE_SIZE asize FILE
+	goto DATA_OFFSET
+	log NAME 0 0
+	append
+	for DATA_SIZE = 0 < FULLSIZE
+		get ENTRY_OFFSET long
+		get TYPE long
+		if TYPE = 0
+			cleanexit
+		endif
+		get ENTRY_SIZE long
+		get HASH longlong
+		get PAD long
+		get ZSIZE long
+		if SIGN = "QTSF"
+			get COMP long
+		endif
+		get SIZE long
+		savepos OFFSET
+		callfunction comp_type 1
+		clog NAME OFFSET ZSIZE SIZE
+		math DATA_OFFSET + ENTRY_SIZE
+		math DATA_SIZE + SIZE
+		goto DATA_OFFSET
+		if SKIP_DUMMY_BLOCKS = 1
+			for DATA_OFFSET = DATA_OFFSET
+				get ENTRY_OFFSET long
+				if ENTRY_OFFSET != DATA_OFFSET
+					math TMP_OFF = DATA_OFFSET
+					math TMP_OFF + BLOCK
+					if TMP_OFF >= ARCHIVE_SIZE
+						print "\nEnd of data, exiting."
+						cleanexit
+					endif
+					math DATA_OFFSET + BLOCK
+					goto DATA_OFFSET
+				else
+					goto DATA_OFFSET
+					break
+				endif
+			next
+		endif
+	next
+	append
+	if DATA_SIZE != FULLSIZE
+		print "File %NAME% was not extracted correctly!"
+		cleanexit
+	endif
+	open 0
+	putarray 0 ARCHIVE_NUM DATA_OFFSET
+endfunction
+
+startfunction comp_type
+	if COMP = 1
+		comtype lz4
+	elif COMP = 4
+		comtype oodle
+	elif COMP = 9
+		comtype zstd
+	endif
+endfunction
