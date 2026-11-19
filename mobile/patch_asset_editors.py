@@ -7,7 +7,7 @@ s = p.read_text(encoding="utf-8")
 
 # Request code and UI actions.
 old_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004;"
-new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImage = 1005;"
+new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImageRequest = 1005;"
 if old_const in s:
     s = s.replace(old_const, new_const, 1)
 elif new_const not in s:
@@ -25,7 +25,7 @@ if 'PickTextureImage(); return Task.CompletedTask;' not in s:
 
 switch_anchor = '            case PickAssetOutput: assetOutputUri = uri; assetOutputText!.Text = "Đích: " + uri.LastPathSegment; break;'
 switch_case = switch_anchor + '''
-            case PickTextureImage: _ = ReplaceSelectedTextureAsync(uri); break;'''
+            case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;'''
 if "case PickTextureImage: _ = ReplaceSelectedTextureAsync(uri); break;" not in s:
     if s.count(switch_anchor) != 1:
         raise SystemExit("Could not uniquely locate OnActivityResult switch")
@@ -101,7 +101,7 @@ methods = r"""
         intent.AddCategory(Intent.CategoryOpenable);
         intent.SetType("image/png");
         intent.AddFlags(ActivityFlags.GrantReadUriPermission | ActivityFlags.GrantPersistableUriPermission);
-        StartActivityForResult(intent, PickTextureImage);
+        StartActivityForResult(intent, PickTextureImageRequest);
     }
 
     private async Task ReplaceSelectedTextureAsync(Uri imageUri)
