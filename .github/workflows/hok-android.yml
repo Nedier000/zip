@@ -36,27 +36,20 @@ jobs:
           set -euxo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import re
           p = Path("mobile/HOKTool.Android.csproj")
           if not p.is_file():
               raise SystemExit(f"Android project missing: {p}")
           s = p.read_text(encoding="utf-8")
-          # Keep the project's original TFM and set the API level locally,
-          # so the referenced AssetStudio project does not inherit it.
-          pattern = r"<TargetPlatformVersion>.*?</TargetPlatformVersion>"
-          if re.search(pattern, s, flags=re.S):
-              s = re.sub(pattern, "<TargetPlatformVersion>35.0</TargetPlatformVersion>", s, count=1, flags=re.S)
-          else:
-              marker = "</PropertyGroup>"
-              i = s.find(marker)
-              if i < 0:
-                  raise SystemExit("No PropertyGroup found in Android project")
-              s = s[:i] + "  <TargetPlatformVersion>35.0</TargetPlatformVersion>" + chr(10) + "  " + s[i:]
+          old = "<TargetFramework>net8.0-android</TargetFramework>"
+          new = "<TargetFramework>net8.0-android34.0</TargetFramework>"
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit("Expected Android TargetFramework element was not found")
           p.write_text(s, encoding="utf-8")
-          print("Configured app-only TargetPlatformVersion=35.0")
+          print("Configured app TargetFramework=net8.0-android34.0")
           PY
-          echo "=== Android project platform properties ==="
-          grep -n -E 'TargetFramework|TargetPlatformVersion|SupportedOSPlatformVersion' mobile/HOKTool.Android.csproj || true
+          grep -n -E 'TargetFramework|TargetPlatformVersion|SupportedOSPlatformVersion' mobile/HOKTool.Android.csproj
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
@@ -116,9 +109,9 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          dotnet restore mobile/HOKTool.Android.csproj -p:CheckEolWorkloads=false -p:CheckEolTargetFramework=false
+          dotnet restore mobile/HOKTool.Android.csproj -p:TargetFramework=net8.0-android34.0 -p:CheckEolWorkloads=false -p:CheckEolTargetFramework=false
           dotnet publish mobile/HOKTool.Android.csproj \
-            -c Release -f net8.0-android -r android-arm64 --self-contained true \
+            -c Release -f net8.0-android34.0 -r android-arm64 --self-contained true \
             -p:AndroidPackageFormat=apk \
             -p:CheckEolWorkloads=false -p:CheckEolTargetFramework=false \
             -p:AndroidKeyStore=true \
