@@ -69,6 +69,33 @@ public static class SerializedObjectPatcher
         return patched;
     }
 
+    public static byte[] ReplaceUniqueByteArray(
+        byte[] rawObject, byte[] originalData, byte[] replacementData, EndianType endian)
+    {
+        if (rawObject == null || originalData == null || replacementData == null)
+            throw new ArgumentNullException();
+        if (originalData.Length == 0 || originalData.Length != replacementData.Length)
+            throw new InvalidDataException("Byte-array replacement must preserve its exact size.");
+
+        byte[] lengthBytes = BitConverter.GetBytes(originalData.Length);
+        if (endian == EndianType.BigEndian) Array.Reverse(lengthBytes);
+        int found = -1;
+        for (int i = 0; i <= rawObject.Length - 4 - originalData.Length; i++)
+        {
+            if (!rawObject.AsSpan(i, 4).SequenceEqual(lengthBytes)) continue;
+            if (!rawObject.AsSpan(i + 4, originalData.Length).SequenceEqual(originalData)) continue;
+            if (found >= 0)
+                throw new InvalidDataException("Byte array appears at multiple offsets; refusing ambiguous patch.");
+            found = i;
+        }
+        if (found < 0)
+            throw new InvalidDataException("Could not uniquely locate the verified byte array in the serialized object.");
+
+        byte[] patched = (byte[])rawObject.Clone();
+        Buffer.BlockCopy(replacementData, 0, patched, found + 4, replacementData.Length);
+        return patched;
+    }
+
     public static byte[] ReplaceFinalPayload(byte[] rawObject, byte[] originalData, byte[] replacementData)
     {
         if (rawObject == null || originalData == null || replacementData == null)
