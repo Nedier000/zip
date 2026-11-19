@@ -6,7 +6,7 @@ if not p.is_file():
 s = p.read_text(encoding="utf-8")
 
 old_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004;"
-new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImageRequest = 1005, PickAudioFileRequest = 1006, PickTextureRawRequest = 1007;"
+new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImageRequest = 1005, PickAudioFileRequest = 1006, PickTextureRawRequest = 1007, PickMeshObjRequest = 1008;"
 if old_const in s:
     s = s.replace(old_const, new_const, 1)
 elif new_const not in s:
@@ -16,6 +16,7 @@ preview = '        AddButton(assetCard, "XEM ẢNH / THÔNG TIN ASSET ĐÃ CHỌ
 buttons = preview + '''
         AddButton(assetCard, "SỬA TEXTURE2D TỪ PNG (ĐỊNH DẠNG UNCOMPRESSED)", "#7C3AED", "#FFFFFF", () => { PickTextureImage(); return Task.CompletedTask; });
         AddButton(assetCard, "THAY TEXTURE RAW (HỖ TRỢ ASTC / ETC / DXT)", "#7C3AED", "#FFFFFF", () => { PickTextureRaw(); return Task.CompletedTask; });
+        AddButton(assetCard, "NHẬP OBJ (CHỈ SỬA VỊ TRÍ VERTEX)", "#7C3AED", "#FFFFFF", () => { PickMeshObj(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA SHADER SCRIPT (NẾU CÓ MÃ NGUỒN)", "#7C3AED", "#FFFFFF", () => { EditSelectedShader(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA MATERIAL FLOAT / COLOR", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterial(); return Task.CompletedTask; });
         AddButton(assetCard, "THAY AUDIOCLIP (CÙNG KÍCH THƯỚC / ĐỊNH DẠNG)", "#7C3AED", "#FFFFFF", () => { PickAudioFile(); return Task.CompletedTask; });'''
@@ -28,6 +29,7 @@ switch_anchor = '            case PickAssetOutput: assetOutputUri = uri; assetOu
 switch_case = switch_anchor + '''
             case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;
             case PickTextureRawRequest: _ = ReplaceSelectedTextureRawAsync(uri); break;
+            case PickMeshObjRequest: _ = ReplaceSelectedMeshAsync(uri); break;
             case PickAudioFileRequest: _ = ReplaceSelectedAudioAsync(uri); break;'''
 if "case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;" not in s:
     if s.count(switch_anchor) != 1:
@@ -36,6 +38,59 @@ if "case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;" 
 
 method_anchor = "    private void ShowSelectedAsset()"
 methods = r"""
+
+
+    private void PickMeshObj()
+    {
+        var selected = GetSelectedAssets();
+        if (selected.Count != 1 || selected[0].Instance is not AssetStudio.Mesh)
+        {
+            Toast.MakeText(this, "Chọn đúng một Mesh trước khi nhập OBJ.", ToastLength.Long)!.Show();
+            return;
+        }
+        if (assetOutputUri == null)
+        {
+            Toast.MakeText(this, "Chọn thư mục xuất asset trước.", ToastLength.Long)!.Show();
+            return;
+        }
+        var intent = new Intent(Intent.ActionOpenDocument);
+        intent.AddCategory(Intent.CategoryOpenable);
+        intent.SetType("*/*");
+        intent.AddFlags(ActivityFlags.GrantReadUriPermission | ActivityFlags.GrantPersistableUriPermission);
+        StartActivityForResult(intent, PickMeshObjRequest);
+    }
+
+    private async Task ReplaceSelectedMeshAsync(Uri objUri)
+    {
+        var selected = GetSelectedAssets();
+        if (selected.Count != 1 || selected[0].Instance is not AssetStudio.Mesh mesh)
+        {
+            Toast.MakeText(this, "Mesh đã chọn không còn hợp lệ.", ToastLength.Long)!.Show();
+            return;
+        }
+        if (assetOutputUri == null) return;
+        await RunBusyAsync(async token =>
+        {
+            string work = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "mesh_obj_import");
+            Directory.CreateDirectory(work);
+            string input = Path.Combine(work, "replacement.obj");
+            using (var source = ContentResolver!.OpenInputStream(objUri)
+                ?? throw new IOException("Không mở được OBJ từ trình quản lý tệp."))
+            await using (var destination = new FileStream(input, FileMode.Create, FileAccess.Write, FileShare.None))
+                await source.CopyToAsync(destination, 1024 * 1024, token);
+            var info = new FileInfo(input);
+            if (info.Length == 0 || info.Length > 128L * 1024 * 1024)
+                throw new InvalidDataException("OBJ rỗng hoặc vượt giới hạn 128 MiB.");
+            string output = Path.Combine(work, "patched");
+            if (Directory.Exists(output)) Directory.Delete(output, true);
+            Directory.CreateDirectory(output);
+            string written = await Task.Run(() => MeshPositionPatcher.CreatePatchedCopy(mesh, input, output), token);
+            await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
+                new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất Mesh {p.done}: {p.name}")), token);
+            WriteStatus("Đã tạo bản Mesh chỉnh vertex: " + Path.GetFileName(written) +
+                ". Chỉ hỗ trợ Mesh vertex buffer inline hiện đại, position float32 và giữ nguyên số/thứ tự vertex; topology, UV, normal, rig và file gốc không đổi.");
+        });
+    }
 
     private void PickTextureRaw()
     {
