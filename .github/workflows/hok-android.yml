@@ -45,7 +45,7 @@ jobs:
               i = s.find(marker)
               if i < 0:
                   raise SystemExit("No PropertyGroup found in Android project")
-              s = s[:i] + "  <TargetPlatformVersion>35.0</TargetPlatformVersion>\\n  " + s[i:]
+              s = s[:i] + "  <TargetPlatformVersion>35.0</TargetPlatformVersion>" + chr(10) + "  " + s[i:]
           p.write_text(s, encoding="utf-8")
           print("Configured Android app TargetPlatformVersion=35.0")
           PY
