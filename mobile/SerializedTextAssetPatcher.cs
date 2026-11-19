@@ -33,8 +33,13 @@ public static class SerializedTextAssetPatcher
         if (raw.Length == 0 || raw.Length != asset.byteSize)
             throw new InvalidDataException("Kích thước object TextAsset không hợp lệ.");
 
-        using var memory = new MemoryStream(raw, writable: false);
+        // Recreate the object's original absolute alignment for ReadAlignedString().
+        int alignmentPrefix = (int)(asset.reader.byteStart & 3);
+        byte[] alignedRaw = new byte[checked(alignmentPrefix + raw.Length)];
+        Buffer.BlockCopy(raw, 0, alignedRaw, alignmentPrefix, raw.Length);
+        using var memory = new MemoryStream(alignedRaw, writable: false);
         using var reader = new EndianBinaryReader(memory, asset.reader.Endian);
+        reader.Position = alignmentPrefix;
 
         // Unity's NoTarget layout includes hide flags and two EditorExtension PPtrs.
         if (asset.platform == BuildTarget.NoTarget)
@@ -48,12 +53,12 @@ public static class SerializedTextAssetPatcher
         if (!string.Equals(serializedName, asset.m_Name, StringComparison.Ordinal))
             throw new InvalidDataException("Tên TextAsset trong dữ liệu nhị phân không trùng với object đã phân tích.");
 
-        long lengthOffset = reader.Position;
+        long lengthOffset = reader.Position - alignmentPrefix;
         int oldLength = reader.ReadInt32();
         if (oldLength < 0 || oldLength > reader.Remaining)
             throw new InvalidDataException("Trường m_Script có độ dài không hợp lệ.");
 
-        long dataOffset = reader.Position;
+        long dataOffset = reader.Position - alignmentPrefix;
         byte[] oldData = reader.ReadBytes(oldLength);
         if (oldData.Length != oldLength || !oldData.SequenceEqual(asset.m_Script ?? Array.Empty<byte>()))
             throw new InvalidDataException("Dữ liệu m_Script không khớp; từ chối sửa object chưa được xác thực.");
@@ -79,7 +84,8 @@ public static class SerializedTextAssetPatcher
         Directory.CreateDirectory(outputDirectory);
         string outputPath = Path.Combine(
             outputDirectory,
-            Path.GetFileNameWithoutExtension(sourcePath) + ".edited.assets");
+            Path.GetFileNameWithoutExtension(sourcePath) + ".edited." +
+            DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff") + ".assets");
 
         File.Copy(sourcePath, outputPath, overwrite: false);
         try
