@@ -217,8 +217,8 @@ jobs:
             -p:AndroidSigningStorePass=android
           mkdir -p dist
           mapfile -t CANDIDATES < <(find mobile/bin/Release -type f -name '*.apk' -print | sort)
-          printf 'APK candidates found: %s\\n' "${#CANDIDATES[@]}"
-          printf '%s\\n' "${CANDIDATES[@]}"
+          printf 'APK candidates found: %s\n' "${#CANDIDATES[@]}"
+          printf '%s\n' "${CANDIDATES[@]}"
           test "${#CANDIDATES[@]}" -gt 0
           APKSIGNER="$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner"
           declare -A VERIFIED_BY_HASH=()
@@ -228,11 +228,11 @@ jobs:
               VERIFIED_BY_HASH["$digest"]="$apk"
             fi
           done
-          mapfile -t VERIFIED_APKS < <(for apk in "${VERIFIED_BY_HASH[@]}"; do printf '%s\\n' "$apk"; done | sort)
+          mapfile -t VERIFIED_APKS < <(for apk in "${VERIFIED_BY_HASH[@]}"; do printf '%s\n' "$apk"; done | sort)
           if [ "${#VERIFIED_APKS[@]}" -ne 1 ]; then
             echo "Expected one unique signed ARM64 APK; found ${#VERIFIED_APKS[@]}."
             echo "Unsigned and signed APK candidate list:"
-            printf '%s\\n' "${CANDIDATES[@]}"
+            printf '%s\n' "${CANDIDATES[@]}"
             exit 1
           fi
           cp "${VERIFIED_APKS[0]}" dist/HoK-Tool-Android-arm64.apk
