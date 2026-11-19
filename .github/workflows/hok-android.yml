@@ -111,7 +111,9 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          for spec in "mobile/Program.cs:1:45" "mobile/AssetBrowser.cs:1:135" "mobile/MainActivity.cs:1:125" "mobile/MainActivity.cs:160:295" "mobile/MainActivity.cs:330:425" "mobile/DbIndexExtractor.cs:245:275"; do
+          echo "===== RESTORED MOBILE FILES ====="
+          find mobile -maxdepth 3 -type f -print | sort
+          for spec in "mobile/AssetBrowser.cs:1:420" "mobile/MainActivity.cs:120:330" "mobile/DbIndexExtractor.cs:1:330" "mobile/SafTree.cs:1:260"; do
             IFS=: read -r file first last <<< "$spec"
             echo "===== $file:$first-$last ====="
             nl -ba "$file" | sed -n "${first},${last}p"
