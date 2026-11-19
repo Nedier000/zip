@@ -28,7 +28,23 @@ method = r"""
             return;
         }
 
-        string original = global::System.Text.Encoding.UTF8.GetString(textAsset.m_Script ?? Array.Empty<byte>());
+        byte[] originalBytes = textAsset.m_Script ?? Array.Empty<byte>();
+        string original;
+        try
+        {
+            original = new global::System.Text.UTF8Encoding(false, true).GetString(originalBytes);
+        }
+        catch (global::System.Text.DecoderFallbackException)
+        {
+            Toast.MakeText(this, "TextAsset này chứa dữ liệu nhị phân hoặc UTF-8 lỗi; trình sửa văn bản từ chối để tránh làm hỏng byte.", ToastLength.Long)!.Show();
+            return;
+        }
+        if (original.IndexOf('\0') >= 0)
+        {
+            Toast.MakeText(this, "TextAsset có byte NUL; không dùng trình sửa văn bản cho dữ liệu này.", ToastLength.Long)!.Show();
+            return;
+        }
+
         var editor = new EditText(this) { Text = original, TextSize = 13 };
         editor.SetSingleLine(false);
         editor.SetMinLines(8);
