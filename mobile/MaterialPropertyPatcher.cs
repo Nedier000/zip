@@ -19,6 +19,21 @@ public static class MaterialPropertyPatcher
         byte[] patched = (byte[])raw.Clone();
         int changes = 0;
 
+        if (root["ints"] is JObject ints)
+        {
+            foreach (var property in ints.Properties())
+            {
+                var matches = material.m_SavedProperties.m_Ints?.Where(x => x.Key == property.Name).ToList()
+                    ?? new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, int>>();
+                if (matches.Count != 1) throw new InvalidDataException($"Int property '{property.Name}' không tồn tại hoặc bị trùng.");
+                int value = property.Value?.Value<int>() ?? throw new InvalidDataException($"Giá trị int '{property.Name}' không hợp lệ.");
+                byte[] oldBytes = EncodeInt(matches[0].Value, material.reader.Endian);
+                byte[] newBytes = EncodeInt(value, material.reader.Endian);
+                PatchAlignedProperty(patched, property.Name, oldBytes, newBytes, material.reader.Endian);
+                changes++;
+            }
+        }
+
         if (root["floats"] is JObject floats)
         {
             foreach (var property in floats.Properties())
@@ -74,6 +89,13 @@ public static class MaterialPropertyPatcher
         }
         if (found < 0) throw new InvalidDataException($"Không xác thực được vị trí nhị phân của property '{name}'.");
         Buffer.BlockCopy(replacement, 0, raw, found, replacement.Length);
+    }
+
+    private static byte[] EncodeInt(int value, EndianType endian)
+    {
+        byte[] bytes = BitConverter.GetBytes(value);
+        if (endian == EndianType.BigEndian) Array.Reverse(bytes);
+        return bytes;
     }
 
     private static byte[] EncodeFloat(float value, EndianType endian)
