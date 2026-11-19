@@ -1,35 +1,126 @@
-name: Build HoK Tool Android APK
+name: Build HoK Tool Android (full port)
+
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
     paths:
-      - 'settings.gradle'
-      - 'build.gradle'
-      - 'gradle.properties'
-      - 'app/**'
+      - 'mobile/**'
+      - 'scripts/**'
+      - 'THIRD_PARTY_LICENSES.md'
+      - 'STUDIO_HOK_LICENSE.txt'
+      - 'android_port_payload.b64.*'
       - '.github/workflows/hok-android.yml'
+
+permissions:
+  contents: read
+
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - name: Checkout Android port
+        uses: actions/checkout@v4
+
+      - name: Restore Android port source payload
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cat android_port_payload.b64.* | base64 -d > "$RUNNER_TEMP/hok_android_port_payload.tar.gz"
+          tar -xzf "$RUNNER_TEMP/hok_android_port_payload.tar.gz" -C "$GITHUB_WORKSPACE"
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
         with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
+          dotnet-version: '8.0.x'
+
+      - name: Install Android SDK and NDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Install .NET Android workload
+        run: dotnet workload install android
+
+      - name: Fetch pinned HoK parser and native decoder sources
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p thirdparty
+          git clone --filter=blob:none https://github.com/yarik0chka/Studio-HoK.git thirdparty/Studio-HoK
+          git -C thirdparty/Studio-HoK checkout 9deed74d3f61c0b28ad6747184281b6adc1b0710
+          git clone --filter=blob:none https://github.com/powzix/ooz.git thirdparty/ooz
+          git -C thirdparty/ooz checkout 05038060aa68f9187ae9923b2388ca8db40e58d1
+          git clone --filter=blob:none https://github.com/DLTcollab/sse2neon.git thirdparty/sse2neon
+          git -C thirdparty/sse2neon checkout 2272251cc3ad9cba8b8c47c4065811cfb396b802
+          python3 scripts/patch_studio.py thirdparty/Studio-HoK
+          python3 scripts/prepare_ooz.py thirdparty/ooz native/ooz
+          cp thirdparty/sse2neon/sse2neon.h native/ooz/sse2neon.h
+
+      - name: Build Oodle-compatible decompressor for Android ARM64
+        shell: bash
+        run: |
+          set -euxo pipefail
+          CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
+          mkdir -p mobile/Platforms/Android/jniLibs/arm64-v8a
+          "$CXX" --target=aarch64-linux-android23 -std=c++14 -O2 -fPIC -shared \
+            -fno-strict-aliasing -fvisibility=hidden \
+            -Wno-deprecated-declarations -Wno-unused-parameter \
+            -Inative/ooz \
+            native/ooz/kraken.cpp native/ooz/bitknit.cpp native/ooz/lzna.cpp native/ooz/wrapper.cpp \
+            -o mobile/Platforms/Android/jniLibs/arm64-v8a/libooz.so
+          file mobile/Platforms/Android/jniLibs/arm64-v8a/libooz.so
+
+      - name: Create temporary APK signing key
+        run: |
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/hoktool.keystore" -storepass android -keypass android \
+            -alias hoktool -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=HoK Tool Android, OU=Build, O=Local Tools, L=NA, S=NA, C=VN"
+
+      - name: Restore and build release APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dotnet restore mobile/HOKTool.Android.csproj
+          dotnet publish mobile/HOKTool.Android.csproj \
+            -c Release -f net8.0-android -r android-arm64 --self-contained true \
+            -p:AndroidPackageFormat=apk \
+            -p:AndroidKeyStore=true \
+            -p:AndroidSigningKeyStore="$RUNNER_TEMP/hoktool.keystore" \
+            -p:AndroidSigningKeyAlias=hoktool \
+            -p:AndroidSigningKeyPass=android \
+            -p:AndroidSigningStorePass=android
+          mkdir -p dist
+          mapfile -t APKS < <(find mobile/bin/Release -type f -name '*.apk' -print)
+          test "${#APKS[@]}" -eq 1
+          cp "${APKS[0]}" dist/HoK-Tool-Android-arm64.apk
+          test -s dist/HoK-Tool-Android-arm64.apk
+          sha256sum dist/HoK-Tool-Android-arm64.apk | tee dist/SHA256SUMS.txt
+
+      - name: Package corresponding source and licenses
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p dist/source
+          cp -a mobile scripts THIRD_PARTY_LICENSES.md STUDIO_HOK_LICENSE.txt dist/source/
+          cp -a thirdparty/Studio-HoK dist/source/Studio-HoK
+          cp -a thirdparty/ooz dist/source/ooz
+          cp -a thirdparty/sse2neon dist/source/sse2neon
+          cp -a native/ooz dist/source/native-ooz-android
+          find dist/source -name .git -type d -prune -exec rm -rf {} +
+          cp /usr/share/common-licenses/GPL-3 dist/source/GPL-3.0.txt
+          tar -czf dist/HoK-Tool-Android-corresponding-source.tar.gz -C dist/source .
+
+      - name: Upload APK and source
+        uses: actions/upload-artifact@v4
         with:
-          packages: platform-tools
-      - name: Install Android SDK
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
-      - uses: actions/upload-artifact@v4
-        with:
-          name: HoK-Tool-Android-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: HoK-Tool-Android-ARM64-full
+          path: dist/*
           if-no-files-found: error
+          retention-days: 30
