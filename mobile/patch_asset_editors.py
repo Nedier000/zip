@@ -16,7 +16,7 @@ preview = '        AddButton(assetCard, "XEM ẢNH / THÔNG TIN ASSET ĐÃ CHỌ
 buttons = preview + '''
         AddButton(assetCard, "SỬA TEXTURE2D TỪ PNG (ĐỊNH DẠNG UNCOMPRESSED)", "#7C3AED", "#FFFFFF", () => { PickTextureImage(); return Task.CompletedTask; });
         AddButton(assetCard, "THAY TEXTURE RAW (HỖ TRỢ ASTC / ETC / DXT)", "#7C3AED", "#FFFFFF", () => { PickTextureRaw(); return Task.CompletedTask; });
-        AddButton(assetCard, "NHẬP OBJ (CHỈ SỬA VỊ TRÍ VERTEX)", "#7C3AED", "#FFFFFF", () => { PickMeshObj(); return Task.CompletedTask; });
+        AddButton(assetCard, "NHẬP OBJ (VERTEX / NORMAL / UV0)", "#7C3AED", "#FFFFFF", () => { PickMeshObj(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA SHADER SCRIPT (NẾU CÓ MÃ NGUỒN)", "#7C3AED", "#FFFFFF", () => { EditSelectedShader(); return Task.CompletedTask; });
         AddButton(assetCard, "SỬA MATERIAL FLOAT / COLOR", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterial(); return Task.CompletedTask; });
         AddButton(assetCard, "ĐỔI TEXTURE SLOT CỦA MATERIAL", "#7C3AED", "#FFFFFF", () => { EditSelectedMaterialTextureSlot(); return Task.CompletedTask; });
@@ -90,7 +90,7 @@ methods = r"""
             await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
                 new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất Mesh {p.done}: {p.name}")), token);
             WriteStatus("Đã tạo bản Mesh chỉnh vertex: " + Path.GetFileName(written) +
-                ". Chỉ hỗ trợ Mesh vertex buffer inline hiện đại, position float32 và giữ nguyên số/thứ tự vertex; topology, UV, normal, rig và file gốc không đổi.");
+                ". Chỉ hỗ trợ vertex buffer inline hiện đại, position/normal/UV0 float32 và giữ nguyên số/thứ tự vertex; topology, rig và file gốc không đổi.");
         });
     }
 
