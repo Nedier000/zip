@@ -14,6 +14,5 @@ for p in files:
         lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
         print(f"--- BEGIN {p} ({len(lines)} lines) ---")
         for i, line in enumerate(lines, 1):
-            if (p.name == "MainActivity.cs" and (re.search(r"private .*?(Async|Task|void|bool|string|byte\[\]).*\(", line) or "AddButton(" in line)) or p.name != "MainActivity.cs":
-                print(f"{i}: {line[:240]}")
+            print(f"{i}: {line[:300]}")
         print(f"--- END {p} ---")
