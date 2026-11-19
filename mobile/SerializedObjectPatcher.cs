@@ -69,6 +69,27 @@ public static class SerializedObjectPatcher
         return patched;
     }
 
+    public static byte[] ReplaceFinalPayload(byte[] rawObject, byte[] originalData, byte[] replacementData)
+    {
+        if (rawObject == null || originalData == null || replacementData == null)
+            throw new ArgumentNullException();
+        if (originalData.Length == 0 || originalData.Length != replacementData.Length)
+            throw new InvalidDataException("Payload replacement must preserve its exact size.");
+        int found = -1;
+        for (int i = 0; i <= rawObject.Length - originalData.Length; i++)
+        {
+            if (!rawObject.AsSpan(i, originalData.Length).SequenceEqual(originalData)) continue;
+            int trailing = rawObject.Length - (i + originalData.Length);
+            if (trailing > 3) continue;
+            if (found >= 0) throw new InvalidDataException("Inline payload appears at multiple offsets; refusing ambiguous patch.");
+            found = i;
+        }
+        if (found < 0) throw new InvalidDataException("Could not locate the verified final inline payload in the object.");
+        byte[] patched = (byte[])rawObject.Clone();
+        Buffer.BlockCopy(replacementData, 0, patched, found, replacementData.Length);
+        return patched;
+    }
+
     private static string CreateStandaloneCopy(
         AssetStudio.Object asset, string sourcePath, FileStream sourceStream, byte[] patchedRaw, string outputDirectory)
     {
