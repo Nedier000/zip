@@ -60,6 +60,38 @@ public static class MaterialTextureSlotPatcher
         return SerializedObjectPatcher.CreatePatchedCopy(material, raw, patched, outputDirectory);
     }
 
+    public static string CreateShaderPatchedCopy(
+        Material material, Shader target, string outputDirectory)
+    {
+        if (material == null || target == null) throw new ArgumentNullException();
+        if (!ReferenceEquals(material.assetsFile, target.assetsFile) &&
+            !string.Equals(material.assetsFile.fileName, target.assetsFile.fileName, StringComparison.OrdinalIgnoreCase))
+            throw new NotSupportedException("Shader đích phải nằm trong cùng SerializedFile với Material.");
+
+        bool pathId32 = material.reader.m_Version < SerializedFileFormatVersion.Unknown_14;
+        var oldPointer = material.m_Shader;
+        if (oldPointer.m_FileID == 0 && oldPointer.m_PathID == target.m_PathID)
+            throw new InvalidOperationException("Shader đích đã được gán cho Material.");
+        byte[] oldBytes = EncodePointer(oldPointer.m_FileID, oldPointer.m_PathID, pathId32, material.reader.Endian);
+        byte[] newBytes = EncodePointer(0, target.m_PathID, pathId32, material.reader.Endian);
+        byte[] raw = material.GetRawData();
+        if (raw.Length == 0 || raw.Length != material.byteSize)
+            throw new InvalidDataException("Raw Material object không khớp byteSize.");
+
+        int found = -1;
+        for (int i = 0; i <= raw.Length - oldBytes.Length; i++)
+        {
+            if (!raw.AsSpan(i, oldBytes.Length).SequenceEqual(oldBytes)) continue;
+            if (found >= 0)
+                throw new InvalidDataException("Shader PPtr xuất hiện ở nhiều vị trí; từ chối patch mơ hồ.");
+            found = i;
+        }
+        if (found < 0) throw new InvalidDataException("Không xác thực được Shader PPtr trong Material.");
+        byte[] patched = (byte[])raw.Clone();
+        Buffer.BlockCopy(newBytes, 0, patched, found, newBytes.Length);
+        return SerializedObjectPatcher.CreatePatchedCopy(material, raw, patched, outputDirectory);
+    }
+
     private static byte[] EncodePointer(int fileId, long pathId, bool pathId32, EndianType endian)
     {
         byte[] file = BitConverter.GetBytes(fileId);
