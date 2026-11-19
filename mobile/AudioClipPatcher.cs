@@ -11,8 +11,6 @@ public static class AudioClipPatcher
     public static string CreatePatchedCopy(AudioClip audio, string replacementPath, string outputDirectory)
     {
         if (audio == null) throw new ArgumentNullException(nameof(audio));
-        if (!string.IsNullOrEmpty(audio.m_Source))
-            throw new NotSupportedException("AudioClip dùng resource .resS ngoài SerializedFile; chưa thay thế external stream.");
         byte[] original = audio.m_AudioData?.GetData() ?? Array.Empty<byte>();
         if (original.Length == 0 || original.LongLength != audio.m_Size)
             throw new InvalidDataException("Kích thước AudioClip inline không hợp lệ.");
@@ -23,6 +21,9 @@ public static class AudioClipPatcher
         string newFormat = DetectContainer(replacement);
         if (oldFormat == "unknown" || newFormat != oldFormat)
             throw new InvalidDataException($"Định dạng audio không khớp: gốc={oldFormat}, thay thế={newFormat}.");
+        if (!string.IsNullOrEmpty(audio.m_Source))
+            return CreateExternalResourceCopy(audio, original, replacement, outputDirectory);
+
         byte[] raw = audio.GetRawData();
         if (raw.Length != audio.byteSize)
             throw new InvalidDataException("Raw AudioClip object không khớp byteSize.");
