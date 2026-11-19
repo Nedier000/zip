@@ -62,7 +62,7 @@ method = r"""
                 () => SerializedTextAssetPatcher.CreatePatchedCopy(textAsset, replacement, output), token);
 
             await SafTree.CopyLocalToTreeAsync(
-                this, parent, assetOutputUri!,
+                this, output, assetOutputUri!,
                 new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất bản sửa {p.done}: {p.name}")),
                 token);
 
