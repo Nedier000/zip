@@ -99,6 +99,13 @@ if old_decompress in source:
 elif new_decompress not in source:
     raise SystemExit("Could not locate the exact DB chunk decompressor implementation")
 
+if "int.MaxValue * 4L" in source or "Asset quá lớn" in source:
+    raise SystemExit("Large-asset Int32/8-GiB guard remains after patch")
+if "fullSize64 > (ulong)long.MaxValue" not in source or "fullSize > (ulong)long.MaxValue" not in source:
+    raise SystemExit("64-bit FULLSIZE validation was not applied")
+if "compressedSize > 256 * 1024 * 1024" not in source:
+    raise SystemExit("Per-chunk allocation safety cap is missing")
+
 path.write_text(source, encoding="utf-8")
 print("Removed arbitrary 8-GiB total-asset cap; retained 64-bit file-offset validation.")
 print("Reduced Zstd peak memory by eliminating the unused duplicate output buffer.")
