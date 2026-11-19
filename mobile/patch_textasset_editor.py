@@ -57,7 +57,7 @@ method = r"""
 
         new AlertDialog.Builder(this)
             .SetTitle("Sửa TextAsset · " + textAsset.m_Name)
-            .SetMessage("Chỉ áp dụng cho SerializedFile độc lập. Nội dung mới không được dài hơn dữ liệu gốc; file nguồn luôn được giữ nguyên.")
+            .SetMessage("Hỗ trợ SerializedFile độc lập và UnityFS chuẩn không mã hóa. Nội dung UTF-8 mới không được dài hơn bản gốc; file nguồn luôn được giữ nguyên.")
             .SetView(scroll)
             .SetNegativeButton("HỦY", (_, _) => { })
             .SetPositiveButton("TẠO BẢN .ASSETS", async (_, _) =>
@@ -82,8 +82,8 @@ method = r"""
                 new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất bản sửa {p.done}: {p.name}")),
                 token);
 
-            WriteStatus("Đã tạo bản sửa độc lập: " + Path.GetFileName(written) +
-                "\nFile gốc không bị thay đổi. Nếu asset ban đầu nằm trong AssetBundle, chức năng sẽ từ chối ghi ngược.");
+            WriteStatus("Đã tạo bản sửa: " + Path.GetFileName(written) +
+                "\nFile nguồn không bị thay đổi. Bundle UnityFS được tái đóng gói và mở kiểm tra lại; container mã hóa hoặc không tương thích sẽ bị từ chối.");
         });
     }
 
