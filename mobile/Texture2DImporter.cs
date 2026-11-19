@@ -16,7 +16,7 @@ public static class Texture2DImporter
             throw new NotSupportedException("Chỉ hỗ trợ texture không mipmap (MipCount ≤ 1).");
         int bpp = texture.m_TextureFormat switch
         {
-            TextureFormat.RGBA32 or TextureFormat.BGRA32 => 4,
+            TextureFormat.RGBA32 or TextureFormat.BGRA32 or TextureFormat.ARGB32 => 4,
             TextureFormat.RGB24 => 3,
             TextureFormat.RGB565 or TextureFormat.ARGB4444 or TextureFormat.RGBA4444 => 2,
             TextureFormat.Alpha8 => 1,
@@ -43,25 +43,40 @@ public static class Texture2DImporter
             byte a = (byte)(c >> 24), r = (byte)(c >> 16), g = (byte)(c >> 8), b = (byte)c;
             if (texture.m_TextureFormat == TextureFormat.RGB24)
             {
-                replacement[p++] = r; replacement[p++] = g; replacement[p++] = b;
+                // Studio-HoK's RGB24 decoder swaps BGR source bytes into RGBA.
+                replacement[p++] = b; replacement[p++] = g; replacement[p++] = r;
             }
             else if (texture.m_TextureFormat == TextureFormat.BGRA32)
             {
+                // BGRA32 decoder copies source bytes directly into RGBA output.
+                replacement[p++] = r; replacement[p++] = g; replacement[p++] = b; replacement[p++] = a;
+            }
+            else if (texture.m_TextureFormat == TextureFormat.RGBA32)
+            {
+                // RGBA32 decoder reverses red/blue in the stored byte stream.
                 replacement[p++] = b; replacement[p++] = g; replacement[p++] = r; replacement[p++] = a;
+            }
+            else if (texture.m_TextureFormat == TextureFormat.ARGB32)
+            {
+                // ARGB32 decoder maps stored A,B,G,R to output R,G,B,A.
+                replacement[p++] = a; replacement[p++] = b; replacement[p++] = g; replacement[p++] = r;
             }
             else if (texture.m_TextureFormat == TextureFormat.RGB565)
             {
-                ushort packed = (ushort)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+                // Studio-HoK's decoder reads R from bits 0..4, G from 5..10, B from 11..15.
+                ushort packed = (ushort)((r >> 3) | ((g >> 2) << 5) | ((b >> 3) << 11));
                 replacement[p++] = (byte)packed; replacement[p++] = (byte)(packed >> 8);
             }
             else if (texture.m_TextureFormat == TextureFormat.RGBA4444)
             {
-                ushort packed = (ushort)(((r >> 4) << 12) | ((g >> 4) << 8) | ((b >> 4) << 4) | (a >> 4));
+                // Decoder reads R,G,B,A from nibbles 1,2,3,0 respectively.
+                ushort packed = (ushort)(((r >> 4) << 4) | ((g >> 4) << 8) | ((b >> 4) << 12) | (a >> 4));
                 replacement[p++] = (byte)packed; replacement[p++] = (byte)(packed >> 8);
             }
             else if (texture.m_TextureFormat == TextureFormat.ARGB4444)
             {
-                ushort packed = (ushort)(((a >> 4) << 12) | ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4));
+                // Decoder reads R,G,B,A from nibbles 0,1,2,3 respectively.
+                ushort packed = (ushort)((r >> 4) | ((g >> 4) << 4) | ((b >> 4) << 8) | ((a >> 4) << 12));
                 replacement[p++] = (byte)packed; replacement[p++] = (byte)(packed >> 8);
             }
             else if (texture.m_TextureFormat == TextureFormat.Alpha8)
