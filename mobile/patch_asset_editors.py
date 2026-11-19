@@ -5,13 +5,12 @@ if not p.is_file():
     raise SystemExit("mobile/MainActivity.cs missing after restoring Android payload")
 s = p.read_text(encoding="utf-8")
 
-# Request code and UI actions.
 old_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004;"
 new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImageRequest = 1005;"
 if old_const in s:
     s = s.replace(old_const, new_const, 1)
 elif new_const not in s:
-    raise SystemExit("Could not find MainActivity picker request-code declaration")
+    raise SystemExit("Could not find picker request-code declaration")
 
 preview = '        AddButton(assetCard, "XEM ẢNH / THÔNG TIN ASSET ĐÃ CHỌN", "#E8EEF8", "#1E3A5F", () => { ShowSelectedAsset(); return Task.CompletedTask; });'
 buttons = preview + '''
@@ -26,63 +25,12 @@ if 'PickTextureImage(); return Task.CompletedTask;' not in s:
 switch_anchor = '            case PickAssetOutput: assetOutputUri = uri; assetOutputText!.Text = "Đích: " + uri.LastPathSegment; break;'
 switch_case = switch_anchor + '''
             case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;'''
-if "case PickTextureImage: _ = ReplaceSelectedTextureAsync(uri); break;" not in s:
+if "case PickTextureImageRequest: _ = ReplaceSelectedTextureAsync(uri); break;" not in s:
     if s.count(switch_anchor) != 1:
         raise SystemExit("Could not uniquely locate OnActivityResult switch")
     s = s.replace(switch_anchor, switch_case, 1)
 
-method_anchor = "    private void EditSelectedMaterial()
-    {
-        var selected = GetSelectedAssets();
-        if (selected.Count != 1 || selected[0].Instance is not AssetStudio.Material material)
-        {
-            Toast.MakeText(this, "Chọn đúng một Material trước khi sửa.", ToastLength.Long)!.Show();
-            return;
-        }
-        if (assetOutputUri == null)
-        {
-            Toast.MakeText(this, "Chọn thư mục xuất asset trước.", ToastLength.Long)!.Show();
-            return;
-        }
-        var initial = new
-        {
-            floats = material.m_SavedProperties.m_Floats.ToDictionary(x => x.Key, x => x.Value),
-            colors = material.m_SavedProperties.m_Colors.ToDictionary(x => x.Key, x => new[] { x.Value.R, x.Value.G, x.Value.B, x.Value.A })
-        };
-        string json = global::Newtonsoft.Json.JsonConvert.SerializeObject(initial, global::Newtonsoft.Json.Formatting.Indented);
-        var editor = new EditText(this) { Text = json, TextSize = 12 };
-        editor.SetSingleLine(false);
-        editor.SetMinLines(12);
-        editor.Gravity = GravityFlags.Top;
-        editor.InputType = global::Android.Text.InputTypes.ClassText | global::Android.Text.InputTypes.TextFlagMultiLine;
-        var scroll = new ScrollView(this);
-        scroll.SetPadding(Dp(10), Dp(8), Dp(10), Dp(8));
-        scroll.AddView(editor);
-        new AlertDialog.Builder(this)
-            .SetTitle("Sửa Material · " + material.m_Name)
-            .SetMessage("Sửa giá trị trong floats và colors. Chỉ thay property đã tồn tại; không thêm/xóa texture slot hoặc keyword. File gốc luôn được giữ nguyên.")
-            .SetView(scroll)
-            .SetNegativeButton("HỦY", (_, _) => { })
-            .SetPositiveButton("TẠO BẢN MATERIAL", async (_, _) => await SaveMaterialPropertyEditAsync(material, editor.Text ?? "{}"))
-            .Show();
-    }
-
-    private async Task SaveMaterialPropertyEditAsync(AssetStudio.Material material, string replacementJson)
-    {
-        await RunBusyAsync(async token =>
-        {
-            string parent = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "material_edits");
-            Directory.CreateDirectory(parent);
-            string output = Path.Combine(parent, "Edited_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss"));
-            Directory.CreateDirectory(output);
-            string written = await Task.Run(() => MaterialPropertyPatcher.CreatePatchedCopy(material, replacementJson, output), token);
-            await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
-                new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất Material {p.done}: {p.name}")), token);
-            WriteStatus("Đã tạo bản Material đã sửa: " + Path.GetFileName(written) +
-                ". Chỉ sửa float/color có sẵn; shader, texture pointer và keyword được giữ nguyên.");
-        });
-    }
-    private void ShowSelectedAsset()"
+method_anchor = "    private void ShowSelectedAsset()"
 methods = r"""
     private void PickTextureImage()
     {
@@ -195,6 +143,60 @@ methods = r"""
         });
     }
 
+    private void EditSelectedMaterial()
+    {
+        var selected = GetSelectedAssets();
+        if (selected.Count != 1 || selected[0].Instance is not AssetStudio.Material material)
+        {
+            Toast.MakeText(this, "Chọn đúng một Material trước khi sửa.", ToastLength.Long)!.Show();
+            return;
+        }
+        if (assetOutputUri == null)
+        {
+            Toast.MakeText(this, "Chọn thư mục xuất asset trước.", ToastLength.Long)!.Show();
+            return;
+        }
+        var initial = new
+        {
+            floats = material.m_SavedProperties.m_Floats.ToDictionary(x => x.Key, x => x.Value),
+            colors = material.m_SavedProperties.m_Colors.ToDictionary(
+                x => x.Key, x => new[] { x.Value.R, x.Value.G, x.Value.B, x.Value.A })
+        };
+        string json = global::Newtonsoft.Json.JsonConvert.SerializeObject(initial, global::Newtonsoft.Json.Formatting.Indented);
+        var editor = new EditText(this) { Text = json, TextSize = 12 };
+        editor.SetSingleLine(false);
+        editor.SetMinLines(12);
+        editor.Gravity = GravityFlags.Top;
+        editor.InputType = global::Android.Text.InputTypes.ClassText | global::Android.Text.InputTypes.TextFlagMultiLine;
+        var scroll = new ScrollView(this);
+        scroll.SetPadding(Dp(10), Dp(8), Dp(10), Dp(8));
+        scroll.AddView(editor);
+        new AlertDialog.Builder(this)
+            .SetTitle("Sửa Material · " + material.m_Name)
+            .SetMessage("Sửa giá trị trong floats và colors. Chỉ thay property đã tồn tại; không thêm/xóa texture slot hoặc keyword. File gốc luôn được giữ nguyên.")
+            .SetView(scroll)
+            .SetNegativeButton("HỦY", (_, _) => { })
+            .SetPositiveButton("TẠO BẢN MATERIAL", async (_, _) => await SaveMaterialPropertyEditAsync(material, editor.Text ?? "{}"))
+            .Show();
+    }
+
+    private async Task SaveMaterialPropertyEditAsync(AssetStudio.Material material, string replacementJson)
+    {
+        await RunBusyAsync(async token =>
+        {
+            string parent = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "material_edits");
+            Directory.CreateDirectory(parent);
+            string output = Path.Combine(parent, "Edited_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss"));
+            Directory.CreateDirectory(output);
+            string written = await Task.Run(
+                () => MaterialPropertyPatcher.CreatePatchedCopy(material, replacementJson, output), token);
+            await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
+                new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất Material {p.done}: {p.name}")), token);
+            WriteStatus("Đã tạo bản Material đã sửa: " + Path.GetFileName(written) +
+                ". Chỉ sửa float/color có sẵn; shader, texture pointer và keyword được giữ nguyên.");
+        });
+    }
+
 """
 if "private void PickTextureImage()" not in s:
     if s.count(method_anchor) != 1:
@@ -202,4 +204,4 @@ if "private void PickTextureImage()" not in s:
     s = s.replace(method_anchor, methods + method_anchor, 1)
 
 p.write_text(s, encoding="utf-8")
-print("Integrated PNG Texture2D import and safe Shader m_Script editor")
+print("Integrated safe Texture2D PNG import, Shader script editing, and Material float/color editing")
