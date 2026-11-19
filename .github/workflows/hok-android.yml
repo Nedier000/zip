@@ -30,7 +30,7 @@ jobs:
           cat android_port_payload.b64.* | base64 -d > "$RUNNER_TEMP/hok_android_port_payload.tar.gz"
           tar -xzf "$RUNNER_TEMP/hok_android_port_payload.tar.gz" -C "$GITHUB_WORKSPACE"
 
-      - name: Set Android API target in app target framework
+      - name: Set Android API target in app project
         shell: bash
         run: |
           set -euxo pipefail
@@ -41,18 +41,19 @@ jobs:
           if not p.is_file():
               raise SystemExit(f"Android project missing: {p}")
           s = p.read_text(encoding="utf-8")
-          # Pin the Android API in the target framework itself. Setting
-          # TargetPlatformVersion separately is overwritten by SDK inference.
-          s, n = re.subn(r"<TargetFramework>net8\.0-android(?:[0-9.]+)?</TargetFramework>",
-                         "<TargetFramework>net8.0-android35.0</TargetFramework>", s)
-          if n == 0:
-              s, n = re.subn(r"<TargetFrameworks>(.*?)</TargetFrameworks>",
-                             lambda m: "<TargetFrameworks>" + re.sub(r"net8\.0-android(?:[0-9.]+)?",
-                             "net8.0-android35.0", m.group(1)) + "</TargetFrameworks>", s, flags=re.S)
-          if n == 0 or "net8.0-android35.0" not in s:
-              raise SystemExit("Could not set Android target framework to net8.0-android35.0")
+          # Keep the project's original TFM and set the API level locally,
+          # so the referenced AssetStudio project does not inherit it.
+          pattern = r"<TargetPlatformVersion>.*?</TargetPlatformVersion>"
+          if re.search(pattern, s, flags=re.S):
+              s = re.sub(pattern, "<TargetPlatformVersion>35.0</TargetPlatformVersion>", s, count=1, flags=re.S)
+          else:
+              marker = "</PropertyGroup>"
+              i = s.find(marker)
+              if i < 0:
+                  raise SystemExit("No PropertyGroup found in Android project")
+              s = s[:i] + "  <TargetPlatformVersion>35.0</TargetPlatformVersion>" + chr(10) + "  " + s[i:]
           p.write_text(s, encoding="utf-8")
-          print("Configured Android target framework net8.0-android35.0")
+          print("Configured app-only TargetPlatformVersion=35.0")
           PY
 
       - name: Setup .NET 8
@@ -115,7 +116,7 @@ jobs:
           set -euxo pipefail
           dotnet restore mobile/HOKTool.Android.csproj -p:CheckEolWorkloads=false -p:CheckEolTargetFramework=false
           dotnet publish mobile/HOKTool.Android.csproj \
-            -c Release -f net8.0-android35.0 -r android-arm64 --self-contained true \
+            -c Release -f net8.0-android -r android-arm64 --self-contained true \
             -p:AndroidPackageFormat=apk \
             -p:CheckEolWorkloads=false -p:CheckEolTargetFramework=false \
             -p:AndroidKeyStore=true \
