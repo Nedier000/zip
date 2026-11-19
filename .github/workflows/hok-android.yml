@@ -72,6 +72,7 @@ jobs:
           "$CXX" --target=aarch64-linux-android23 -std=c++14 -O2 -fPIC -shared \
             -fno-strict-aliasing -fvisibility=hidden \
             -Wno-deprecated-declarations -Wno-unused-parameter \
+            -D_byteswap_uint64=__builtin_bswap64 \
             -Inative/ooz \
             native/ooz/kraken.cpp native/ooz/bitknit.cpp native/ooz/lzna.cpp native/ooz/wrapper.cpp \
             -o mobile/Platforms/Android/jniLibs/arm64-v8a/libooz.so
