@@ -32,7 +32,7 @@ method = r"""
         var editor = new EditText(this) { Text = original, TextSize = 13 };
         editor.SetSingleLine(false);
         editor.SetMinLines(8);
-        editor.SetGravity(GravityFlags.Top);
+        editor.Gravity = GravityFlags.Top;
         editor.InputType = global::Android.Text.InputTypes.ClassText | global::Android.Text.InputTypes.TextFlagMultiLine;
 
         var scroll = new ScrollView(this);
