@@ -387,6 +387,8 @@ methods = r"""
         }
         var initial = new
         {
+            ints = material.m_SavedProperties.m_Ints?.ToDictionary(x => x.Key, x => x.Value)
+                ?? new Dictionary<string, int>(),
             floats = material.m_SavedProperties.m_Floats.ToDictionary(x => x.Key, x => x.Value),
             colors = material.m_SavedProperties.m_Colors.ToDictionary(
                 x => x.Key, x => new[] { x.Value.R, x.Value.G, x.Value.B, x.Value.A })
@@ -402,7 +404,7 @@ methods = r"""
         scroll.AddView(editor);
         new AlertDialog.Builder(this)
             .SetTitle("Sửa Material · " + material.m_Name)
-            .SetMessage("Sửa giá trị trong floats và colors. Chỉ thay property đã tồn tại; không thêm/xóa texture slot hoặc keyword. File gốc luôn được giữ nguyên.")
+            .SetMessage("Sửa giá trị trong ints, floats và colors. Chỉ thay property đã tồn tại; texture slot và keyword được giữ nguyên. File gốc luôn được giữ nguyên.")
             .SetView(scroll)
             .SetNegativeButton("HỦY", (_, _) => { })
             .SetPositiveButton("TẠO BẢN MATERIAL", async (_, _) => await SaveMaterialPropertyEditAsync(material, editor.Text ?? "{}"))
