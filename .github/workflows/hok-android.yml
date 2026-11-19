@@ -107,17 +107,13 @@ jobs:
           print("Fixed Zstd Unwrap Span<byte> to byte[] conversion")
           PY
 
-      - name: Dump failing source excerpts
+      - name: Apply safe standalone TextAsset editor
         shell: bash
         run: |
           set -euxo pipefail
-          echo "===== RESTORED MOBILE FILES ====="
-          find mobile -maxdepth 3 -type f -print | sort
-          for spec in "mobile/AssetBrowser.cs:1:420" "mobile/MainActivity.cs:120:330" "mobile/DbIndexExtractor.cs:1:330" "mobile/SafTree.cs:1:260"; do
-            IFS=: read -r file first last <<< "$spec"
-            echo "===== $file:$first-$last ====="
-            nl -ba "$file" | sed -n "${first},${last}p"
-          done
+          test -s mobile/SerializedTextAssetPatcher.cs
+          python3 mobile/patch_textasset_editor.py
+          grep -n -E 'SỬA TEXTASSET|EditSelectedTextAsset|SaveTextAssetEditAsync' mobile/MainActivity.cs
 
       - name: Set Android API target in app project
         shell: bash
@@ -256,10 +252,20 @@ jobs:
           cp /usr/share/common-licenses/GPL-3 dist/source/GPL-3.0.txt
           tar -czf dist/HoK-Tool-Android-corresponding-source.tar.gz -C dist/source .
 
-      - name: Upload APK and source
+      - name: Upload installable ARM64 APK
         uses: actions/upload-artifact@v4
         with:
-          name: HoK-Tool-Android-ARM64-full
-          path: dist/*
+          name: HoK-Tool-Android-ARM64-APK
+          path: |
+            dist/HoK-Tool-Android-arm64.apk
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload corresponding source
+        uses: actions/upload-artifact@v4
+        with:
+          name: HoK-Tool-Android-ARM64-source
+          path: dist/HoK-Tool-Android-corresponding-source.tar.gz
           if-no-files-found: error
           retention-days: 30
