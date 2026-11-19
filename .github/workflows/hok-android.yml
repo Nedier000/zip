@@ -30,7 +30,7 @@ jobs:
           cat android_port_payload.b64.* | base64 -d > "$RUNNER_TEMP/hok_android_port_payload.tar.gz"
           tar -xzf "$RUNNER_TEMP/hok_android_port_payload.tar.gz" -C "$GITHUB_WORKSPACE"
 
-      - name: Resolve Android namespace type ambiguities
+      - name: Resolve Android namespace and API ambiguities
         shell: bash
         run: |
           set -euxo pipefail
@@ -50,19 +50,43 @@ jobs:
           prepend_aliases("mobile/AssetBrowser.cs", [
               "using Mesh = AssetStudio.Mesh;",
               "using Shader = AssetStudio.Shader;",
+              "using GameManager = AssetStudio.GameManager;",
+              "using Path = System.IO.Path;",
           ])
           prepend_aliases("mobile/SafTree.cs", [
               "using Uri = global::Android.Net.Uri;",
           ])
+
           p = Path("mobile/MainActivity.cs")
           s = p.read_text(encoding="utf-8")
-          alias = "using Uri = global::Android.Net.Uri;"
-          if alias not in s:
-              s = alias + chr(10) + s
+          aliases = [
+              "using Uri = global::Android.Net.Uri;",
+              "using Path = System.IO.Path;",
+              "using OperationCanceledException = System.OperationCanceledException;",
+          ]
+          for alias in reversed(aliases):
+              if alias not in s:
+                  s = alias + chr(10) + s
           s = s.replace("Android.Content.", "global::Android.Content.")
+          s = s.replace("Resource.Attribute.", "global::Android.Resource.Attribute.")
+          s = s.replace("Resource.Layout.", "global::Android.Resource.Layout.")
           p.write_text(s, encoding="utf-8")
-          print("Applied Android API aliases to AssetBrowser, SafTree, and MainActivity")
+
+          p = Path("mobile/Program.cs")
+          s = p.read_text(encoding="utf-8").replace("Android.Util.", "global::Android.Util.")
+          p.write_text(s, encoding="utf-8")
+          print("Applied Android namespace aliases and global-qualified framework references")
           PY
+
+      - name: Dump failing source excerpts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          for spec in "mobile/Program.cs:1:45" "mobile/AssetBrowser.cs:1:135" "mobile/MainActivity.cs:1:125" "mobile/MainActivity.cs:160:295" "mobile/MainActivity.cs:330:425" "mobile/DbIndexExtractor.cs:245:275"; do
+            IFS=: read -r file first last <<< "$spec"
+            echo "===== $file:$first-$last ====="
+            nl -ba "$file" | sed -n "${first},${last}p"
+          done
 
       - name: Set Android API target in app project
         shell: bash
