@@ -308,7 +308,7 @@ methods = r"""
             await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
                 new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất AudioClip {p.done}: {p.name}")), token);
             WriteStatus("Đã tạo bản AudioClip đã sửa: " + Path.GetFileName(written) +
-                ". Chỉ hỗ trợ dữ liệu inline, cùng kích thước và cùng định dạng OGG/FSB5/RIFF/MP3/MP4; file gốc được giữ nguyên.");
+                ". Yêu cầu cùng kích thước và cùng định dạng OGG/FSB5/RIFF/MP3/MP4. Với .resS ngoài, thư mục đầu ra có cả bản sao SerializedFile và resource đã sửa; external stream trong UnityFS vẫn chưa hỗ trợ.");
         });
     }
 
