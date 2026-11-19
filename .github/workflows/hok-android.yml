@@ -83,12 +83,12 @@ jobs:
           s = s.replace(", SingleLine = true", "")
           if "searchBox.SetSingleLine(true);" not in s:
               s = s.replace("searchBox = new EditText(this) { Hint = \"Tìm tên, PathID hoặc loại asset…\", TextSize = 13 };",
-                            "searchBox = new EditText(this) { Hint = \"Tìm tên, PathID hoặc loại asset…\", TextSize = 13 };\\n        searchBox.SetSingleLine(true);")
+                            "searchBox = new EditText(this) { Hint = \"Tìm tên, PathID hoặc loại asset…\", TextSize = 13 };" + chr(10) + "        searchBox.SetSingleLine(true);")
           s = s.replace(", AllCaps = false", "")
           s = s.replace("var clearVisible = new Button(this) { Text = \"BỎ CHỌN\", TextSize = 10 };",
-                        "var clearVisible = new Button(this) { Text = \"BỎ CHỌN\", TextSize = 10 };\\n        selectVisible.SetAllCaps(false);\\n        clearVisible.SetAllCaps(false);")
+                        "var clearVisible = new Button(this) { Text = \"BỎ CHỌN\", TextSize = 10 };" + chr(10) + "        selectVisible.SetAllCaps(false);" + chr(10) + "        clearVisible.SetAllCaps(false);")
           s = s.replace("var image = new ImageView(this) { AdjustViewBounds = true };",
-                        "var image = new ImageView(this);\\n                image.SetAdjustViewBounds(true);")
+                        "var image = new ImageView(this);" + chr(10) + "                image.SetAdjustViewBounds(true);")
           p.write_text(s, encoding="utf-8")
 
           p = Path("mobile/Program.cs")
