@@ -36,38 +36,38 @@ jobs:
           set -euxo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
-          def add_alias(path, aliases):
+          def insert_aliases(path, aliases):
               p = Path(path)
               if not p.is_file():
                   raise SystemExit(f"Missing source file: {path}")
               s = p.read_text(encoding="utf-8")
-              ns = re.search(r"^\\s*namespace\\b", s, flags=re.M)
-              if ns is None:
+              ns = s.find("namespace ")
+              if ns < 0:
                   raise SystemExit(f"Namespace declaration not found: {path}")
-              head, tail = s[:ns.start()], s[ns.start():]
+              head, tail = s[:ns], s[ns:]
               for alias in aliases:
                   name = alias.split("=", 1)[0].strip()
-                  if not re.search(r"^\\s*using\\s+" + re.escape(name) + r"\\s*=", head, flags=re.M):
-                      head += alias + "\\n"
+                  if f"{name} =" not in head:
+                      head = head.rstrip() + chr(10) + alias + chr(10)
               p.write_text(head + tail, encoding="utf-8")
 
-          add_alias("mobile/AssetBrowser.cs", [
+          insert_aliases("mobile/AssetBrowser.cs", [
               "using Mesh = AssetStudio.Mesh;",
               "using Shader = AssetStudio.Shader;",
           ])
-          add_alias("mobile/SafTree.cs", [
+          insert_aliases("mobile/SafTree.cs", [
               "using Uri = global::Android.Net.Uri;",
           ])
+
           p = Path("mobile/MainActivity.cs")
           s = p.read_text(encoding="utf-8")
-          ns = re.search(r"^\\s*namespace\\b", s, flags=re.M)
-          if ns is None:
+          ns = s.find("namespace ")
+          if ns < 0:
               raise SystemExit("Namespace declaration not found: mobile/MainActivity.cs")
-          head, tail = s[:ns.start()], s[ns.start():]
-          if not re.search(r"^\\s*using\\s+Uri\\s*=", head, flags=re.M):
-              head += "using Uri = global::Android.Net.Uri;\\n"
+          head, tail = s[:ns], s[ns:]
+          if "using Uri =" not in head:
+              head = head.rstrip() + chr(10) + "using Uri = global::Android.Net.Uri;" + chr(10)
           tail = tail.replace("Android.Content.", "global::Android.Content.")
           p.write_text(head + tail, encoding="utf-8")
           print("Applied Android API aliases to AssetBrowser, SafTree, and MainActivity")
