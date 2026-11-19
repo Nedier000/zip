@@ -7,9 +7,9 @@ using AssetStudio;
 namespace HoKTool.Android;
 
 /// <summary>
-/// Conservative TextAsset editor for standalone Unity SerializedFiles.
-/// It keeps every object offset and the total file length unchanged.
-/// Bundle-backed objects are rejected until a full UnityFS writer is available.
+/// Validates and applies a same-size-or-smaller UTF-8 TextAsset payload replacement.
+/// Standalone SerializedFiles are copied in place; standard unencrypted UnityFS
+/// containers are rebuilt by UnityFsTextAssetRepacker and verified after parsing.
 /// </summary>
 public static class SerializedTextAssetPatcher
 {
@@ -18,21 +18,37 @@ public static class SerializedTextAssetPatcher
         if (asset == null) throw new ArgumentNullException(nameof(asset));
         if (replacementText == null) replacementText = string.Empty;
 
-        string sourcePath = Path.GetFullPath(asset.assetsFile.fullName);
-        if (!File.Exists(sourcePath))
-            throw new NotSupportedException("Asset này được nạp từ bên trong AssetBundle. Chưa thể ghi ngược container UnityFS an toàn.");
-
-        if (asset.reader.BaseStream is not FileStream sourceStream)
-            throw new NotSupportedException("Chỉ sửa được TextAsset thuộc SerializedFile độc lập; dữ liệu đang nằm trong stream của AssetBundle.");
-
-        string streamPath = Path.GetFullPath(sourceStream.Name);
-        if (!string.Equals(sourcePath, streamPath, StringComparison.OrdinalIgnoreCase))
-            throw new NotSupportedException("Nguồn object không khớp file SerializedFile gốc; từ chối ghi để tránh sửa nhầm file.");
-
-        byte[] raw = asset.GetRawData();
-        if (raw.Length == 0 || raw.Length != asset.byteSize)
+        byte[] originalRaw = asset.GetRawData();
+        if (originalRaw.Length == 0 || originalRaw.Length != asset.byteSize)
             throw new InvalidDataException("Kích thước object TextAsset không hợp lệ.");
 
+        byte[] patchedRaw = BuildPatchedObjectBytes(asset, originalRaw, replacementText);
+        Directory.CreateDirectory(outputDirectory);
+
+        string sourcePath = Path.GetFullPath(asset.assetsFile.fullName);
+        if (asset.reader.BaseStream is FileStream sourceStream)
+        {
+            string streamPath = Path.GetFullPath(sourceStream.Name);
+            if (string.Equals(sourcePath, streamPath, StringComparison.OrdinalIgnoreCase) &&
+                File.Exists(sourcePath))
+            {
+                return CreateStandaloneCopy(asset, sourcePath, sourceStream, patchedRaw, outputDirectory);
+            }
+        }
+
+        string bundlePath = asset.assetsFile.originalPath;
+        if (!string.IsNullOrWhiteSpace(bundlePath) && File.Exists(bundlePath))
+        {
+            return UnityFsTextAssetRepacker.CreatePatchedBundleCopy(
+                asset, originalRaw, patchedRaw, outputDirectory);
+        }
+
+        throw new NotSupportedException(
+            "Không xác định được SerializedFile độc lập hoặc UnityFS gốc; từ chối ghi để tránh sửa nhầm dữ liệu.");
+    }
+
+    private static byte[] BuildPatchedObjectBytes(TextAsset asset, byte[] raw, string replacementText)
+    {
         // Recreate the object's original absolute alignment for ReadAlignedString().
         int alignmentPrefix = (int)(asset.reader.byteStart & 3);
         byte[] alignedRaw = new byte[checked(alignmentPrefix + raw.Length)];
@@ -67,7 +83,7 @@ public static class SerializedTextAssetPatcher
         if (newData.Length > oldLength)
             throw new InvalidOperationException(
                 $"Nội dung mới dài {newData.Length} byte, vượt dung lượng hiện tại {oldLength} byte. " +
-                "Bản này chỉ hỗ trợ thay nội dung ngắn hơn hoặc bằng bản gốc để giữ nguyên mọi offset.");
+                "Chế độ an toàn chỉ nhận nội dung có số byte UTF-8 không vượt bản gốc để giữ nguyên mọi offset.");
 
         byte[] lengthBytes = BitConverter.GetBytes(newData.Length);
         if (asset.reader.Endian == EndianType.BigEndian)
@@ -83,7 +99,16 @@ public static class SerializedTextAssetPatcher
         if (newData.Length > 0)
             Buffer.BlockCopy(newData, 0, raw, dataStart, newData.Length);
 
-        Directory.CreateDirectory(outputDirectory);
+        return raw;
+    }
+
+    private static string CreateStandaloneCopy(
+        TextAsset asset,
+        string sourcePath,
+        FileStream sourceStream,
+        byte[] patchedRaw,
+        string outputDirectory)
+    {
         string outputPath = Path.Combine(
             outputDirectory,
             Path.GetFileNameWithoutExtension(sourcePath) + ".edited." +
@@ -95,23 +120,21 @@ public static class SerializedTextAssetPatcher
             using (var output = new FileStream(outputPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             {
                 long objectStart = asset.reader.byteStart;
-                if (objectStart < 0 || objectStart + raw.Length > output.Length)
+                if (objectStart < 0 || objectStart + patchedRaw.Length > output.Length)
                     throw new InvalidDataException("Vị trí object nằm ngoài file SerializedFile.");
                 output.Position = objectStart;
-                output.Write(raw, 0, raw.Length);
+                output.Write(patchedRaw, 0, patchedRaw.Length);
                 output.Flush(flushToDisk: true);
             }
 
-            // Verify that the output contains the exact replacement at the
-            // original object offset and retains the source file's total size.
             using (var verify = new FileStream(outputPath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 if (verify.Length != sourceStream.Length)
                     throw new InvalidDataException("Độ dài file đầu ra thay đổi ngoài dự kiến.");
                 verify.Position = asset.reader.byteStart;
-                byte[] check = new byte[raw.Length];
+                byte[] check = new byte[patchedRaw.Length];
                 verify.ReadExactly(check);
-                if (!check.SequenceEqual(raw))
+                if (!check.SequenceEqual(patchedRaw))
                     throw new InvalidDataException("Kiểm tra sau ghi thất bại; bản đầu ra không được chấp nhận.");
             }
 
