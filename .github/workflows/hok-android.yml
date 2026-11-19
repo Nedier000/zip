@@ -107,30 +107,13 @@ jobs:
           print("Fixed Zstd Unwrap Span<byte> to byte[] conversion")
           PY
 
-      - name: Diagnose Android DB asset size limits
-        shell: bash
-        run: |
-          set -eu
-          echo "=== Mobile source inventory ==="
-          find mobile -maxdepth 2 -type f -name '*.cs' -printf '%p %s bytes\\n' | sort
-          echo "=== Explicit size/error guards ==="
-          grep -RniE 'too large|asset.*(size|limit)|maximum.*(asset|size)|max.*(asset|size)|size.*(limit|exceed|large)|cannot.*extract|cannot.*read|MemoryStream|ToArray\\(' mobile --include='*.cs' || true
-          echo "=== DB extractor source ==="
-          if [ -f mobile/DbIndexExtractor.cs ]; then sed -n '1,420p' mobile/DbIndexExtractor.cs; else echo "DbIndexExtractor.cs missing"; fi
-          echo "=== Asset browser and export source locations ==="
-          for f in mobile/AssetBrowser.cs mobile/AssetExportService.cs mobile/MainActivity.cs; do
-            if [ -f "$f" ]; then
-              echo "--- $f ---"
-              grep -nE 'Extract|Export|Memory|Stream|Size|large|limit|asset' "$f" | head -220 || true
-            fi
-          done
-
       - name: Apply safe standalone TextAsset editor
         shell: bash
         run: |
           set -euxo pipefail
           test -s mobile/SerializedTextAssetPatcher.cs
           python3 mobile/patch_textasset_editor.py
+          python3 mobile/patch_db_large_asset.py
           grep -n -E 'SỬA TEXTASSET|EditSelectedTextAsset|SaveTextAssetEditAsync' mobile/MainActivity.cs
 
       - name: Set Android API target in app project
