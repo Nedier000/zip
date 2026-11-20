@@ -25,6 +25,19 @@ new = """            if (entry.Instance is AssetStudio.AudioClip)
                 var audioView = new StudioAudioPreviewView(this, audioPath);
                 layout.AddView(audioView, new LinearLayout.LayoutParams(-1, Dp(300)));
             }
+            else if (entry.Instance is AssetStudio.Texture2D texture)
+            {
+                var bitmap = AssetBrowser.CreatePreviewBitmap(entry);
+                if (bitmap != null)
+                {
+                    var textureView = new StudioTexturePreviewView(this, bitmap, texture);
+                    layout.AddView(textureView, new LinearLayout.LayoutParams(-1, Dp(390)));
+                }
+                else
+                {
+                    layout.AddView(Text("Texture format này chưa giải mã được để preview.", 12, "#64748B"));
+                }
+            }
             else
             {
                 var previewMesh = ResolveMeshForPreview(entry.Instance);
