@@ -202,6 +202,21 @@ if old_index_probe in source:
 elif new_index_probe not in source:
     raise SystemExit("Could not uniquely locate IsIndexFile probe")
 
+
+# Expose the legacy extractor's already-linked Oodle helper to the dedicated
+# QTS reader without duplicating native loading or importing a second decoder.
+oodle_bridge = """    public static int DecompressOodleChunk(byte[] source, byte[] destination)
+    {
+        return OozHelper.Decompress(source, destination);
+    }
+
+"""
+if "public static int DecompressOodleChunk(" not in source:
+    method_anchor = "    private static string FormatBytes(long bytes)"
+    if source.count(method_anchor) != 1:
+        raise SystemExit("Could not uniquely locate DbIndexExtractor method insertion point for Oodle bridge")
+    source = source.replace(method_anchor, oodle_bridge + method_anchor, 1)
+
 path.write_text(source, encoding="utf-8")
 print("Removed arbitrary 8-GiB total-asset cap; retained 64-bit file-offset validation.")
 print("Reduced Zstd peak memory by eliminating the unused duplicate output buffer.")
