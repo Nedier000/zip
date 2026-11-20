@@ -68,6 +68,17 @@ replacement = r'''    private readonly StudioWorkspaceService workspace = new();
         => StudioMobileExportService.ExportSceneRoots(
             roots ?? Array.Empty<StudioSceneNode>(), outputFolder, settings, cancellationToken, progress);
 
+    public StudioBulkExportResult ExportSelectedModels(
+        IEnumerable<AssetEntry> selected, string outputFolder, StudioMobileSettings settings,
+        bool merge, System.Threading.CancellationToken cancellationToken,
+        IProgress<string>? progress = null)
+    {
+        if (selected == null) throw new ArgumentNullException(nameof(selected));
+        var instances = selected.Where(x => x?.Instance != null).Select(x => x.Instance).ToArray();
+        return StudioMobileExportService.ExportModelSet(
+            instances, outputFolder, settings, merge, cancellationToken, progress);
+    }
+
     public StudioBulkExportResult ExportAllAssets(
         string outputFolder, StudioMobileSettings settings,
         System.Threading.CancellationToken cancellationToken,
