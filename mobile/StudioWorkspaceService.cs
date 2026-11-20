@@ -203,6 +203,16 @@ public sealed class StudioWorkspaceService : IDisposable
         }
     }
 
+    public string ExportModel(StudioAssetRow row, string outputFolder, StudioMobileSettings settings)
+    {
+        if (row == null) throw new ArgumentNullException(nameof(row));
+        lock (sync)
+        {
+            EnsureLoaded();
+            return StudioModelExportService.ExportSelected(row.Instance, manager!.assetsFileList.ToArray(), outputFolder, settings);
+        }
+    }
+
     public void ExportClassGroups(string outputFolder)
     {
         if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentException(nameof(outputFolder));
