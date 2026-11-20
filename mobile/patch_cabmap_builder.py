@@ -14,7 +14,9 @@ export_buttons = cab_button + '''
         AddButton(assetCard, "EXPORT ALL EXPORTABLE ASSETS", "#1D4ED8", "#FFFFFF",
             async () => await ExportAllStudioAssetsAsync());
         AddButton(assetCard, "EXPORT SELECTED ASSETS", "#1D4ED8", "#FFFFFF",
-            async () => await ExportSelectedStudioAssetsAsync());'''
+            async () => await ExportSelectedStudioAssetsAsync());
+        AddButton(assetCard, "EXPORT SPLIT SCENE MODELS (GLB)", "#1D4ED8", "#FFFFFF",
+            async () => await ExportSceneModelsAsync());'''
 if "ShowCabMapBuilder();" not in s:
     if s.count(asset_map_button) != 1:
         raise SystemExit("Could not locate AssetMap builder button")
