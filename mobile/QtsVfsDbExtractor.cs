@@ -268,14 +268,14 @@ public static class QtsVfsDbExtractor
         {
             codec = "Zstd";
             using var zstd = new Decompressor();
-            byte[] z = zstd.Unwrap(packed).ToArray();
-            if (z.Length != result.Length) throw new InvalidDataException($"Zstd decoded {z.Length}, expected {result.Length}.");
-            return z;
+            int n = zstd.Unwrap(packed, 0, packed.Length, result, 0, result.Length);
+            if (n != result.Length) throw new InvalidDataException($"Zstd decoded {n}, expected {result.Length}.");
+            return result;
         }
         if (packed.Length >= 2 && (packed[0] == 0x8C || packed[0] == 0xCC) && packed[1] == 0x0C)
         {
             codec = "Oodle";
-            int n = OozHelper.Decompress(packed, result);
+            int n = DbIndexExtractor.DecompressOodleChunk(packed, result);
             if (n != result.Length) throw new InvalidDataException($"Oodle decoded {n}, expected {result.Length}.");
             return result;
         }
