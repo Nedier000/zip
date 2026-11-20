@@ -18,24 +18,42 @@ public static class StudioModelExportService
         if (gameObject == null) throw new ArgumentNullException(nameof(gameObject));
         if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentException("Output folder is empty.", nameof(outputFolder));
         Directory.CreateDirectory(outputFolder);
-
         settings ??= new StudioMobileSettings();
         settings.ApplyCoreSettings();
-        var options = CreateOptions(settings);
-        var converted = new ModelConverter(gameObject, options);
-        string name = SafeName(string.IsNullOrWhiteSpace(gameObject.Name) ? "GameObject" : gameObject.Name);
-        string outputPath = GetUniquePath(outputFolder, name + ".glb");
-        var exporter = new StudioGlbExporter();
-        exporter.Export(outputPath, converted, settings.exportSkins, settings.exportAnimations, settings.exportMaterials, settings.exportBlendShape, (float)settings.scaleFactor);
-        return outputPath;
+
+        var converted = new ModelConverter(gameObject, CreateOptions(settings));
+        return WriteImportedModel(converted, gameObject.Name, outputFolder, settings);
     }
 
     public static string ExportAnimator(Animator animator, string outputFolder, StudioMobileSettings settings)
     {
         if (animator == null) throw new ArgumentNullException(nameof(animator));
-        if (!animator.m_GameObject.TryGet(out var gameObject))
-            throw new InvalidDataException("Animator does not resolve to a GameObject.");
-        return ExportGameObject(gameObject, outputFolder, settings);
+        if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentException("Output folder is empty.", nameof(outputFolder));
+        Directory.CreateDirectory(outputFolder);
+        settings ??= new StudioMobileSettings();
+        settings.ApplyCoreSettings();
+
+        // Use the original Studio-HoK Animator overload so Avatar, transform
+        // hierarchy and controller clip binding are retained by ModelConverter.
+        var converted = new ModelConverter(animator, CreateOptions(settings));
+        string name = animator.m_GameObject.TryGet(out var gameObject) ? gameObject.Name : animator.Name;
+        return WriteImportedModel(converted, name, outputFolder, settings);
+    }
+
+    private static string WriteImportedModel(
+        IImported converted,
+        string sourceName,
+        string outputFolder,
+        StudioMobileSettings settings)
+    {
+        if (converted?.RootFrame == null || converted.MeshList == null || converted.MeshList.Count == 0)
+            throw new InvalidDataException("Selected GameObject / Animator has no exportable mesh.");
+        string name = SafeName(string.IsNullOrWhiteSpace(sourceName) ? "GameObject" : sourceName);
+        string outputPath = GetUniquePath(outputFolder, name + ".glb");
+        var exporter = new StudioGlbExporter();
+        exporter.Export(outputPath, converted, settings.exportSkins, settings.exportAnimations,
+            settings.exportMaterials, settings.exportBlendShape, (float)settings.scaleFactor);
+        return outputPath;
     }
 
     public static string ExportSelected(
@@ -45,10 +63,12 @@ public static class StudioModelExportService
         StudioMobileSettings settings)
     {
         if (selected == null) throw new ArgumentNullException(nameof(selected));
+        if (selected is Animator animator)
+            return ExportAnimator(animator, outputFolder, settings);
+
         GameObject? gameObject = selected switch
         {
             GameObject go => go,
-            Animator animator when animator.m_GameObject.TryGet(out var animatorObject) => animatorObject,
             MeshRenderer renderer when renderer.m_GameObject.TryGet(out var rendererObject) => rendererObject,
             SkinnedMeshRenderer skinnedRenderer when skinnedRenderer.m_GameObject.TryGet(out var skinnedObject) => skinnedObject,
             MeshFilter filter when filter.m_GameObject.TryGet(out var filterObject) => filterObject,
@@ -112,6 +132,7 @@ public static class StudioModelExportService
 
         // glTF 2.0 core requires PNG or JPEG images. TGA/BMP are useful
         // for standalone texture export but cannot be embedded as core GLB images.
+        ImageFormat imageFormat;
         if (string.Equals(settings.convertType, "Jpeg", StringComparison.OrdinalIgnoreCase))
             imageFormat = ImageFormat.Jpeg;
         else
