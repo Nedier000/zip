@@ -138,6 +138,13 @@ new_scan = """if (!mobileSettings.skipContainer && !string.IsNullOrWhiteSpace(mo
                 var loadedAI = await StudioMobileMapService.LoadSelectedAIAsync(mobileSettings.selectedAIVersion);
                 WriteStatus($"AI v{mobileSettings.selectedAIVersion} đã nạp · {loadedAI.AssetCount:N0} entries.");
             }
+            StudioMobileMapService.Initialize(Path.Combine(FilesDir!.AbsolutePath, "Studio-HoK"));
+            if (!mobileSettings.skipContainer && !string.IsNullOrWhiteSpace(mobileSettings.selectedCABMapName))
+            {
+                bool cabLoaded = StudioMobileMapService.LoadCABMap(mobileSettings.selectedCABMapName);
+                if (!cabLoaded)
+                    WriteStatus($"CABMap '{mobileSettings.selectedCABMapName}' chưa nạp được; tiếp tục bằng metadata nội bộ.");
+            }
             mobileSettings.ApplyCoreSettings();
             var result = await Task.Run(
                 () => assetBrowser.Scan(input, WriteStatus, mobileSettings.specifyUnityVersion,
