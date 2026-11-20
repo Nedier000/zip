@@ -306,7 +306,7 @@ public static class StudioMobileExportService
                 string output = StudioModelExportService.ExportMergedGameObjects(
                     models, outputFolder, settings, clipArray, rootName);
                 progress?.Report($"Merged model: {Path.GetFileName(output)}");
-                return new StudioBulkExportResult(selected.Length, 1, selected.Length - models.Count, Array.Empty<string>());
+                return new StudioBulkExportResult(selected.Length, 1, Math.Max(0, selected.Length - models.Count - animationClips.Length), Array.Empty<string>());
             }
             catch (Exception ex)
             {
@@ -316,7 +316,7 @@ public static class StudioMobileExportService
         }
 
         int exported = 0;
-        int skipped = selected.Length - models.Count - animationClips.Length;
+        int skipped = Math.Max(0, selected.Length - models.Count - animationClips.Length);
         var errors = new List<string>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var model in models)
