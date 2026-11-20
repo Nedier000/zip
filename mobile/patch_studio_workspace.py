@@ -132,7 +132,13 @@ if "ShowAssetClasses();" not in main:
 
 # Apply the persisted Unity version and dependency-resolution preferences.
 old_scan = "var result = await Task.Run(() => assetBrowser.Scan(input), token);"
-new_scan = """mobileSettings.ApplyCoreSettings();
+new_scan = """if (!mobileSettings.skipContainer && !string.IsNullOrWhiteSpace(mobileSettings.selectedAIVersion))
+            {
+                StudioMobileMapService.Initialize(Path.Combine(FilesDir!.AbsolutePath, "Studio-HoK"));
+                var loadedAI = await StudioMobileMapService.LoadSelectedAIAsync(mobileSettings.selectedAIVersion);
+                WriteStatus($"AI v{mobileSettings.selectedAIVersion} đã nạp · {loadedAI.AssetCount:N0} entries.");
+            }
+            mobileSettings.ApplyCoreSettings();
             var result = await Task.Run(
                 () => assetBrowser.Scan(input, WriteStatus, mobileSettings.specifyUnityVersion,
                     mobileSettings.enableResolveDependencies, mobileSettings.selectedGame,
