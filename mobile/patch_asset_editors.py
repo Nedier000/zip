@@ -27,10 +27,10 @@ build_ui = """        body.AddView(SectionTitle("03  ·  BUILD / REPACK ASSETBUN
         buildCard.AddView(Text("Trích SerializedFile (.assets/CAB-*), chỉnh sửa bằng công cụ phù hợp, sau đó thay lại đúng entry trong UnityFS gốc. Kích thước file .assets phải giữ nguyên để không làm lệch offset.", 13, "#475569"));
         buildBundleText = Text("Bundle gốc: chưa chọn", 12, "#64748B");
         buildCard.AddView(buildBundleText);
-        AddButton(buildCard, "CHỌN UNITYFS GỐC", "#E8EEF8", "#1E3A5F", () => PickBuildFile(PickBuildBundleRequest));
+        AddButton(buildCard, "CHỌN UNITYFS GỐC", "#E8EEF8", "#1E3A5F", () => { PickBuildFile(PickBuildBundleRequest); return Task.CompletedTask; });
         buildSerializedText = Text("SerializedFile đã sửa: chưa chọn", 12, "#64748B");
         buildCard.AddView(buildSerializedText);
-        AddButton(buildCard, "CHỌN .ASSETS ĐÃ SỬA", "#E8EEF8", "#1E3A5F", () => PickBuildFile(PickBuildSerializedRequest));
+        AddButton(buildCard, "CHỌN .ASSETS ĐÃ SỬA", "#E8EEF8", "#1E3A5F", () => { PickBuildFile(PickBuildSerializedRequest); return Task.CompletedTask; });
         AddButton(buildCard, "TRÍCH .ASSETS RA KHỎI UNITYFS", "#0F766E", "#FFFFFF", async () => await ExtractBundleSerializedFilesAsync());
         AddButton(buildCard, "BUILD / REPACK ASSETBUNDLE", "#1D4ED8", "#FFFFFF", async () => await BuildAssetBundleAsync());
         body.AddView(buildCard);
