@@ -33,9 +33,46 @@ new = """            if (entry.Instance is AssetStudio.AudioClip)
                     var textureView = new StudioTexturePreviewView(this, bitmap, texture);
                     layout.AddView(textureView, new LinearLayout.LayoutParams(-1, Dp(390)));
                 }
+                else AddTextPreview(layout, "Texture format này chưa giải mã được để preview.");
+            }
+            else if (entry.Instance is AssetStudio.TextAsset textAsset)
+            {
+                AddTextPreview(layout, global::System.Text.Encoding.UTF8.GetString(textAsset.m_Script ?? Array.Empty<byte>()).Replace("\\0", ""));
+            }
+            else if (entry.Instance is AssetStudio.Shader shader)
+            {
+                AddTextPreview(layout, shader.Convert() ?? "Serialized Shader không giải mã được.");
+            }
+            else if (entry.Instance is AssetStudio.MonoBehaviour behaviour)
+            {
+                var value = behaviour.ToType();
+                string json = value != null
+                    ? Newtonsoft.Json.JsonConvert.SerializeObject(value, Newtonsoft.Json.Formatting.Indented)
+                    : (behaviour.Dump() ?? "MonoBehaviour không có TypeTree khả dụng.");
+                AddTextPreview(layout, json);
+            }
+            else if (entry.Instance is AssetStudio.AnimationClip clip)
+            {
+                AddTextPreview(layout, clip.Convert() ?? "AnimationClip không thể chuyển thành YAML.");
+            }
+            else if (entry.Instance is AssetStudio.MiHoYoBinData binData)
+            {
+                AddTextPreview(layout, binData.AsString ?? "BinData không phải JSON/text.");
+            }
+            else if (entry.Instance is AssetStudio.Font font)
+            {
+                byte[] fontBytes = font.m_FontData ?? Array.Empty<byte>();
+                if (fontBytes.Length == 0) AddTextPreview(layout, "Font không chứa dữ liệu nhúng.");
                 else
                 {
-                    layout.AddView(Text("Texture format này chưa giải mã được để preview.", 12, "#64748B"));
+                    string fontFolder = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "font_preview");
+                    Directory.CreateDirectory(fontFolder);
+                    string fontPath = Path.Combine(fontFolder, "preview_" + entry.PathId + ".font");
+                    File.WriteAllBytes(fontPath, fontBytes);
+                    var sample = new TextView(this) { Text = "AaBbCc 0123456789\nStudio-HoK Android Font Preview", TextSize = 26 };
+                    sample.Typeface = Typeface.CreateFromFile(fontPath);
+                    layout.AddView(sample, new LinearLayout.LayoutParams(-1, Dp(220)));
+                    layout.AddView(Text($"Font bytes: {fontBytes.Length:N0}", 11, "#64748B"));
                 }
             }
             else
@@ -60,7 +97,7 @@ new = """            if (entry.Instance is AssetStudio.AudioClip)
                     }
                     else
                     {
-                        layout.AddView(Text("Loại asset này chưa có preview trực quan. Dùng nút Xuất để lưu dữ liệu.", 12, "#64748B"));
+                        AddTextPreview(layout, "Loại asset này chưa có preview trực quan. Dùng nút Xuất để lưu dữ liệu.");
                     }
                 }
             }"""
@@ -68,6 +105,28 @@ if old in s:
     s = s.replace(old, new, 1)
 elif "ResolveMeshForPreview(entry.Instance)" not in s:
     raise SystemExit("Could not locate image-only preview block")
+
+text_helper = r"""
+    private void AddTextPreview(LinearLayout layout, string content)
+    {
+        var scroller = new ScrollView(this);
+        var text = new TextView(this)
+        {
+            Text = content ?? string.Empty,
+            TextSize = 11,
+            Typeface = Typeface.Monospace
+        };
+        text.SetTextIsSelectable(true);
+        text.SetPadding(Dp(10), Dp(8), Dp(10), Dp(8));
+        scroller.AddView(text);
+        layout.AddView(scroller, new LinearLayout.LayoutParams(-1, Dp(300)));
+    }
+
+"""
+if "private void AddTextPreview(LinearLayout layout, string content)" not in s:
+    if s.count(anchor) != 1:
+        raise SystemExit("Could not locate ShowSelectedAsset insertion point for text preview helper")
+    s = s.replace(anchor, text_helper + anchor, 1)
 
 anchor = "    private void ShowSelectedAsset()"
 helper = r"""
