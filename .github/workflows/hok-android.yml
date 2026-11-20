@@ -110,6 +110,7 @@ jobs:
           python3 mobile/patch_textasset_editor.py
           python3 mobile/patch_db_large_asset.py
           python3 mobile/patch_asset_editors.py
+          python3 mobile/patch_studio_workspace.py
           grep -n -E 'SỬA TEXTASSET|EditSelectedTextAsset|SaveTextAssetEditAsync' mobile/MainActivity.cs
 
       - name: Set Android API target in app project
