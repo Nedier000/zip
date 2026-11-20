@@ -1,3 +1,4 @@
+using GameManager = AssetStudio.GameManager;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -156,6 +157,13 @@ public static class StudioMobilePanels
         AddCheck(content, checks, "Minimal AssetMap", settings.minimalAssetMap, v => settings.minimalAssetMap = v);
         AddCheck(content, checks, "Encrypted MiHoYo BinData", settings.encrypted, v => settings.encrypted = v);
 
+        AddLabel(content, "Game profile");
+        string[] gameNames = GameManager.GetGameNames();
+        var gameSpinner = new Spinner(activity);
+        gameSpinner.Adapter = new ArrayAdapter<string>(activity, Android.Resource.Layout.SimpleSpinnerItem, gameNames);
+        gameSpinner.SetSelection(Math.Clamp(settings.selectedGame, 0, Math.Max(0, gameNames.Length - 1)));
+        content.AddView(gameSpinner, MatchWrap());
+
         AddLabel(content, "Unity version override");
         var unityVersion = new EditText(activity) { Text = settings.specifyUnityVersion, Hint = "Ví dụ: 2021.3.XXf1" };
         content.AddView(unityVersion, MatchWrap());
@@ -197,6 +205,7 @@ public static class StudioMobilePanels
             .SetPositiveButton("LƯU", (_, _) =>
             {
                 foreach (var item in checks) item.Apply(item.Box.Checked);
+                settings.selectedGame = Math.Max(0, gameSpinner.SelectedItemPosition);
                 settings.specifyUnityVersion = unityVersion.Text ?? string.Empty;
                 settings.convertType = format.SelectedItem?.ToString() ?? "Png";
                 if (decimal.TryParse(scale.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var scaleValue))
