@@ -255,6 +255,102 @@ public static class StudioMobileExportService
         return ".audio";
     }
 
+    public static StudioBulkExportResult ExportModelSet(
+        IEnumerable<AssetStudio.Object> selectedAssets,
+        string outputFolder,
+        StudioMobileSettings settings,
+        bool merge,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progress = null)
+    {
+        if (selectedAssets == null) throw new ArgumentNullException(nameof(selectedAssets));
+        if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentException("Output folder is empty.", nameof(outputFolder));
+        settings ??= new StudioMobileSettings();
+        Directory.CreateDirectory(outputFolder);
+
+        var selected = selectedAssets.Where(x => x != null).ToArray();
+        var models = new List<GameObject>();
+        var animatorByObject = new Dictionary<GameObject, Animator>();
+        var animationClips = selected.OfType<AnimationClip>().Distinct().ToArray();
+        foreach (var item in selected)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                if (item is GameObject gameObject && gameObject.HasModel())
+                {
+                    if (!models.Contains(gameObject)) models.Add(gameObject);
+                }
+                else if (item is Animator animator &&
+                         animator.m_GameObject.TryGet(out var target) &&
+                         target.HasModel())
+                {
+                    if (!models.Contains(target)) models.Add(target);
+                    animatorByObject[target] = animator;
+                }
+            }
+            catch { }
+        }
+
+        if (models.Count == 0)
+            return new StudioBulkExportResult(selected.Length, 0, selected.Length,
+                new[] { "No selected GameObject / Animator contains a mesh." });
+
+        AnimationClip[]? clipArray = animationClips.Length == 0 ? null : animationClips;
+        if (merge)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                string rootName = models[0].Name + " (merge)";
+                string output = StudioModelExportService.ExportMergedGameObjects(
+                    models, outputFolder, settings, clipArray, rootName);
+                progress?.Report($"Merged model: {Path.GetFileName(output)}");
+                return new StudioBulkExportResult(selected.Length, 1, selected.Length - models.Count, Array.Empty<string>());
+            }
+            catch (Exception ex)
+            {
+                return new StudioBulkExportResult(selected.Length, 0, selected.Length,
+                    new[] { $"Merge export failed: {ex.Message}" });
+            }
+        }
+
+        int exported = 0;
+        int skipped = selected.Length - models.Count - animationClips.Length;
+        var errors = new List<string>();
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var model in models)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string fileStem = SafeSegment(model.Name);
+            if (fileStem.Length == 0) fileStem = $"GameObject_{model.m_PathID}";
+            if (!settings.allowDuplicates && !names.Add(fileStem))
+            {
+                skipped++;
+                continue;
+            }
+            if (settings.allowDuplicates && !names.Add(fileStem))
+                fileStem += "__" + model.m_PathID.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            try
+            {
+                string outputFolderForModel = outputFolder;
+                string path = animatorByObject.TryGetValue(model, out var animator)
+                    ? StudioModelExportService.ExportAnimator(animator, outputFolderForModel, settings, clipArray)
+                    : StudioModelExportService.ExportGameObject(model, outputFolderForModel, settings, clipArray);
+                exported++;
+                progress?.Report($"Split model {exported:N0}/{models.Count:N0}: {Path.GetFileName(path)}");
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{model.Name} [{model.m_PathID}]: {ex.Message}");
+                progress?.Report($"Model error: {model.Name} · {ex.Message}");
+            }
+        }
+
+        return new StudioBulkExportResult(selected.Length, exported, skipped, errors);
+    }
+
     public static StudioBulkExportResult ExportSceneRoots(
         IEnumerable<StudioSceneNode> sourceRoots,
         string outputFolder,
