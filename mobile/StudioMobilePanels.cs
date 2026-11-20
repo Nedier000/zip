@@ -1,3 +1,4 @@
+using System.IO;
 using GameManager = AssetStudio.GameManager;
 using System;
 using System.Collections.Generic;
@@ -423,10 +424,10 @@ public static class StudioMobilePanels
                                 {
                                     try
                                     {
-                                        string path = await StudioMobileMapService.DownloadAIAsync(versions[selected.Which].Version);
+                                        var loaded = await StudioMobileMapService.DownloadAndLoadAIAsync(versions[selected.Which].Version);
                                         settings.selectedAIVersion = versions[selected.Which].Version;
                                         settings.Save();
-                                        Toast.MakeText(activity, "AI đã sẵn sàng: " + System.IO.Path.GetFileName(path), ToastLength.Long)!.Show();
+                                        Toast.MakeText(activity, $"AI đã tải và nạp: {Path.GetFileName(loaded.Path)} · {loaded.AssetCount:N0} asset index entries.", ToastLength.Long)!.Show();
                                     }
                                     catch (Exception ex) { ShowError(activity, "Lỗi tải AI", ex); }
                                 })
