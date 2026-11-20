@@ -1,3 +1,4 @@
+using AssetStudio;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -40,7 +41,7 @@ public static class StudioMobileExportService
         int skipped = 0;
         var errors = new List<string>();
         var nameKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var exportedModels = new HashSet<long>();
+        var exportedModels = new HashSet<GameObject>();
 
         foreach (var row in rows)
         {
@@ -74,7 +75,7 @@ public static class StudioMobileExportService
 
             if (isModelEntry && model != null && HasModelSafe(model))
             {
-                if (!exportedModels.Add(model.m_PathID))
+                if (!exportedModels.Add(model))
                 {
                     skipped++;
                     continue;
