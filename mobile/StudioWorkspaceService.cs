@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Globalization;
 using System.Threading;
 using AssetStudio;
 
@@ -78,12 +79,13 @@ public sealed class StudioWorkspaceService : IDisposable
         lock (sync) ResetCore();
     }
 
-    public IReadOnlyList<StudioAssetRow> GetAssetRows(bool includeAllObjects = true)
+    public IReadOnlyList<StudioAssetRow> GetAssetRows(bool includeAllObjects = true, bool skipContainer = false)
     {
         lock (sync)
         {
             EnsureLoaded();
-            var containerNames = BuildContainerMap();
+            var containerNames = BuildContainerMap(skipContainer);
+            var objectNames = BuildObjectNameMap(containerNames);
             var rows = new List<StudioAssetRow>();
 
             foreach (var file in manager!.assetsFileList)
@@ -94,16 +96,33 @@ public sealed class StudioWorkspaceService : IDisposable
                     if (!includeAllObjects && !obj.type.CanExport()) continue;
 
                     containerNames.TryGetValue(obj, out string? container);
-                    long size = obj.byteSize;
+                    objectNames.TryGetValue(obj, out string? resolvedName);
+                    string sourcePath = file.originalPath ?? file.fullName;
+                    string sourceStem = Path.GetFileNameWithoutExtension(sourcePath);
+                    if (!skipContainer && !string.IsNullOrEmpty(container) &&
+                        int.TryParse(container, NumberStyles.Integer, CultureInfo.InvariantCulture, out int containerHash) &&
+                        uint.TryParse(sourceStem, NumberStyles.Integer, CultureInfo.InvariantCulture, out uint resourceId))
+                    {
+                        string mapped = ResourceIndex.GetContainer(resourceId, unchecked((uint)containerHash));
+                        if (!string.IsNullOrEmpty(mapped))
+                        {
+                            container = mapped;
+                            if (obj is MiHoYoBinData) resolvedName = Path.GetFileNameWithoutExtension(mapped);
+                        }
+                    }
+
+                    long size = GetFullAssetSize(obj);
                     rows.Add(new StudioAssetRow(
                         obj,
-                        string.IsNullOrWhiteSpace(obj.Name) ? $"{obj.type}_{obj.m_PathID}" : obj.Name,
+                        !string.IsNullOrWhiteSpace(resolvedName)
+                            ? resolvedName
+                            : string.IsNullOrWhiteSpace(obj.Name) ? $"{obj.type}_{obj.m_PathID}" : obj.Name,
                         container ?? string.Empty,
                         obj.type.ToString(),
                         obj.m_PathID,
                         size,
                         file.fileName,
-                        file.originalPath ?? file.fullName,
+                        sourcePath,
                         file.unityVersion));
                 }
             }
@@ -266,21 +285,83 @@ public sealed class StudioWorkspaceService : IDisposable
         };
     }
 
-    private Dictionary<AssetStudio.Object, string> BuildContainerMap()
+    private Dictionary<AssetStudio.Object, string> BuildContainerMap(bool skipContainer)
     {
         var map = new Dictionary<AssetStudio.Object, string>();
+        if (skipContainer) return map;
+
         foreach (var file in manager!.assetsFileList)
         {
-            foreach (var bundle in file.Objects.OfType<AssetBundle>())
+            foreach (var obj in file.Objects ?? new List<AssetStudio.Object>())
             {
-                foreach (var entry in bundle.m_Container)
+                switch (obj)
                 {
-                    if (entry.Value.asset.TryGet(out var obj) && !map.ContainsKey(obj))
-                        map.Add(obj, entry.Key);
+                    case AssetBundle bundle:
+                        foreach (var entry in bundle.m_Container)
+                        {
+                            int begin = Math.Max(0, entry.Value.preloadIndex);
+                            int end = Math.Min(bundle.m_PreloadTable.Count, begin + Math.Max(0, entry.Value.preloadSize));
+                            for (int i = begin; i < end; i++)
+                            {
+                                if (bundle.m_PreloadTable[i].TryGet(out var target) && !map.ContainsKey(target))
+                                    map.Add(target, entry.Key);
+                            }
+                        }
+                        break;
+                    case ResourceManager resourceManager:
+                        foreach (var entry in resourceManager.m_Container)
+                        {
+                            if (entry.Value.TryGet(out var target) && !map.ContainsKey(target))
+                                map.Add(target, entry.Key);
+                        }
+                        break;
                 }
             }
         }
         return map;
+    }
+
+    private Dictionary<AssetStudio.Object, string> BuildObjectNameMap(Dictionary<AssetStudio.Object, string> containerMap)
+    {
+        var names = new Dictionary<AssetStudio.Object, string>();
+        foreach (var file in manager!.assetsFileList)
+        {
+            foreach (var indexObject in (file.Objects ?? new List<AssetStudio.Object>()).OfType<IndexObject>())
+            {
+                foreach (var entry in indexObject.AssetMap)
+                {
+                    if (!entry.Value.Object.TryGet<MiHoYoBinData>(out var binData)) continue;
+                    if (int.TryParse(entry.Key, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int hash))
+                    {
+                        names[binData] = entry.Key;
+                        containerMap.TryAdd(binData, hash.ToString(CultureInfo.InvariantCulture));
+                    }
+                    else
+                    {
+                        names[binData] = $"BinFile #{binData.m_PathID}";
+                    }
+                }
+            }
+        }
+        return names;
+    }
+
+    private static long GetFullAssetSize(AssetStudio.Object obj)
+    {
+        long size = obj.byteSize;
+        switch (obj)
+        {
+            case Texture2D texture when !string.IsNullOrEmpty(texture.m_StreamData?.path):
+                size += texture.m_StreamData.size;
+                break;
+            case AudioClip audio when !string.IsNullOrEmpty(audio.m_Source):
+                size += audio.m_Size;
+                break;
+            case VideoClip video when !string.IsNullOrEmpty(video.m_OriginalPath):
+                size += video.m_ExternalResources.m_Size;
+                break;
+        }
+        return size;
     }
 
     private static string[] NormalizeFiles(IEnumerable<string> paths)
