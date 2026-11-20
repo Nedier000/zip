@@ -188,6 +188,13 @@ public static class StudioMobilePanels
         format.SetSelection(Math.Max(0, Array.IndexOf(formats, settings.convertType)));
         content.AddView(format, MatchWrap());
 
+        AddLabel(content, "Asset grouping");
+        var grouping = new Spinner(activity);
+        string[] groups = { "Type name", "Container path", "Source file name", "Do not group" };
+        grouping.Adapter = new ArrayAdapter<string>(activity, Android.Resource.Layout.SimpleSpinnerItem, groups);
+        grouping.SetSelection(Math.Clamp(settings.assetGroupOption, 0, groups.Length - 1));
+        content.AddView(grouping, MatchWrap());
+
         AddLabel(content, "Model scale factor");
         var scale = new EditText(activity) { Text = settings.scaleFactor.ToString(System.Globalization.CultureInfo.InvariantCulture), InputType = Android.Text.InputTypes.ClassNumber | Android.Text.InputTypes.NumberFlagDecimal };
         content.AddView(scale, MatchWrap());
@@ -221,6 +228,7 @@ public static class StudioMobilePanels
                 settings.selectedGame = Math.Max(0, gameSpinner.SelectedItemPosition);
                 settings.specifyUnityVersion = unityVersion.Text ?? string.Empty;
                 settings.convertType = format.SelectedItem?.ToString() ?? "Png";
+                settings.assetGroupOption = Math.Max(0, grouping.SelectedItemPosition);
                 if (decimal.TryParse(scale.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var scaleValue))
                     settings.scaleFactor = Math.Clamp(scaleValue, 0.001m, 1000m);
                 if (decimal.TryParse(bone.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var boneValue))
