@@ -255,12 +255,12 @@ public static class StudioMobilePanels
                 TextSize = 12,
                 Gravity = GravityFlags.CenterVertical
             };
-            row.AddView(label, new LayoutParams(0, Dp(activity, 42), 1));
+            row.AddView(label, new LinearLayout.LayoutParams(0, Dp(activity, 42), 1));
 
             var parse = new CheckBox(activity) { Text = "Parse", TextSize = 11, Checked = item.Value.Item1 };
             var export = new CheckBox(activity) { Text = "Export", TextSize = 11, Checked = item.Value.Item2 };
-            row.AddView(parse, new LayoutParams(Dp(activity, 76), Dp(activity, 42)));
-            row.AddView(export, new LayoutParams(Dp(activity, 82), Dp(activity, 42)));
+            row.AddView(parse, new LinearLayout.LayoutParams(Dp(activity, 76), Dp(activity, 42)));
+            row.AddView(export, new LinearLayout.LayoutParams(Dp(activity, 82), Dp(activity, 42)));
             content.AddView(row);
             editors[item.Key] = (parse, export);
         }
