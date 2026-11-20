@@ -34,7 +34,7 @@ public sealed class StudioMobileSettings
     public byte key { get; set; } = 0;
     public bool enableConsole { get; set; } = false;
     public bool encrypted { get; set; } = false;
-    public int selectedGame { get; set; } = 0;
+    public int selectedGame { get; set; } = (int)AssetStudio.GameType.HonorOfKings;
     public bool enableResolveDependencies { get; set; } = true;
     public int assetMapType { get; set; } = 0;
     public bool collectAnimations { get; set; } = false;
