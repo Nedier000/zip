@@ -88,7 +88,6 @@ public static class StudioMobilePanels
     {
         try
         {
-            var temporary = new StudioWorkspaceService();
             // Export is driven from the same class-group snapshot used by the
             // browser; this method writes the exact TypeTree rows, not a stub.
             System.IO.Directory.CreateDirectory(outputFolder);
@@ -110,7 +109,6 @@ public static class StudioMobilePanels
                     }
                 }
             }
-            temporary.Dispose();
             completed?.Invoke($"Đã xuất cấu trúc {groups.Sum(x => x.Classes.Count):N0} class.");
         }
         catch (Exception ex)
