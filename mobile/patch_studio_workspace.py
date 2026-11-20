@@ -59,6 +59,11 @@ replacement = r'''    private readonly StudioWorkspaceService workspace = new();
     public IReadOnlyList<StudioClassGroup> GetClassGroups() => workspace.GetClassGroups();
     public void ExportClassGroups(string outputFolder) => workspace.ExportClassGroups(outputFolder);
     public void Clear() => workspace.Reset();
+    public string[] GetLoadedFilePaths() => workspace.SerializedFiles
+        .Select(file => file.fullName)
+        .Where(File.Exists)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
 
     public static Bitmap? CreatePreviewBitmap'''
 browser_new, n = pattern.subn(replacement, browser, count=1)
