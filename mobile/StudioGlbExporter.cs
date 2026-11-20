@@ -428,8 +428,32 @@ public sealed class StudioGlbExporter
                     pbr["baseColorTexture"] = info;
                     break;
                 case 1:
+                case 3:
                     materialJson["normalTexture"] = info;
                     break;
+                case 2:
+                {
+                    var extensions = materialJson.TryGetValue("extensions", out var currentExtensions) &&
+                                     currentExtensions is Dictionary<string, object> existingExtensions
+                        ? existingExtensions
+                        : new Dictionary<string, object>();
+                    var specular = extensions.TryGetValue("KHR_materials_specular", out var currentSpecular) &&
+                                   currentSpecular is Dictionary<string, object> existingSpecular
+                        ? existingSpecular
+                        : new Dictionary<string, object>
+                        {
+                            ["specularFactor"] = 1.0f,
+                            ["specularColorFactor"] = new[]
+                            {
+                                Clamp01(material.Specular.R), Clamp01(material.Specular.G), Clamp01(material.Specular.B)
+                            }
+                        };
+                    specular["specularColorTexture"] = info;
+                    extensions["KHR_materials_specular"] = specular;
+                    materialJson["extensions"] = extensions;
+                    extensionsUsed.Add("KHR_materials_specular");
+                    break;
+                }
                 case 5:
                     materialJson["emissiveTexture"] = info;
                     materialJson["emissiveFactor"] = new[]
@@ -491,15 +515,15 @@ public sealed class StudioGlbExporter
                     positions[index * 3 + 2] = (targetVertex.Vertex.Z - baseVertex.Vertex.Z) * exportScale;
                     if (normals != null)
                     {
-                        normals[index * 3] = targetVertex.Normal.X;
-                        normals[index * 3 + 1] = targetVertex.Normal.Y;
-                        normals[index * 3 + 2] = targetVertex.Normal.Z;
+                        normals[index * 3] = targetVertex.Normal.X - baseVertex.Normal.X;
+                        normals[index * 3 + 1] = targetVertex.Normal.Y - baseVertex.Normal.Y;
+                        normals[index * 3 + 2] = targetVertex.Normal.Z - baseVertex.Normal.Z;
                     }
                     if (tangents != null)
                     {
-                        tangents[index * 3] = targetVertex.Tangent.X;
-                        tangents[index * 3 + 1] = targetVertex.Tangent.Y;
-                        tangents[index * 3 + 2] = targetVertex.Tangent.Z;
+                        tangents[index * 3] = targetVertex.Tangent.X - baseVertex.Tangent.X;
+                        tangents[index * 3 + 1] = targetVertex.Tangent.Y - baseVertex.Tangent.Y;
+                        tangents[index * 3 + 2] = targetVertex.Tangent.Z - baseVertex.Tangent.Z;
                     }
                 }
 
