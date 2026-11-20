@@ -182,7 +182,7 @@ public static class StudioMobilePanels
 
         AddLabel(content, "Texture output format");
         var format = new Spinner(activity);
-        var formats = new[] { "Png", "Jpeg", "Bmp", "Tga", "Webp" };
+        var formats = new[] { "Png", "Jpeg", "Bmp", "Tga" };
         format.Adapter = new ArrayAdapter<string>(activity, Android.Resource.Layout.SimpleSpinnerItem, formats);
         format.SetSelection(Math.Max(0, Array.IndexOf(formats, settings.convertType)));
         content.AddView(format, MatchWrap());
@@ -333,7 +333,6 @@ public static class StudioMobilePanels
                 .Select(x => x.Key + "  →  " + TextureSemantics[Math.Clamp(x.Value, 0, TextureSemantics.Length - 1)])
                 .ToArray();
             existing.Adapter = new ArrayAdapter<string>(activity, Android.Resource.Layout.SimpleListItem1, labels);
-            existing.ItemClick += RemoveSelected;
         }
         void RemoveSelected(object? sender, AdapterView.ItemClickEventArgs args)
         {
@@ -341,6 +340,7 @@ public static class StudioMobilePanels
             if (key != null) mappings.Remove(key);
             Refresh();
         }
+        existing.ItemClick += RemoveSelected;
         Refresh();
 
         var add = new Button(activity) { Text = "THÊM / CẬP NHẬT MAPPING" };
