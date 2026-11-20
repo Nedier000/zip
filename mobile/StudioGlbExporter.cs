@@ -34,6 +34,7 @@ public sealed class StudioGlbExporter
     private readonly Dictionary<string, byte[]> textureBytes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<GlbMorphTarget>> morphTargetsByPath = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> meshNodeByPath = new(StringComparer.Ordinal);
+    private readonly HashSet<string> extensionsUsed = new(StringComparer.Ordinal);
 
     public StudioGlbExporter()
     {
@@ -87,6 +88,7 @@ public sealed class StudioGlbExporter
         if (materials.Count > 0) gltf["materials"] = materials;
         if (skins.Count > 0) gltf["skins"] = skins;
         if (animations.Count > 0) gltf["animations"] = animations;
+        if (extensionsUsed.Count > 0) gltf["extensionsUsed"] = extensionsUsed.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         if (images.Count > 0)
         {
             gltf["images"] = images;
@@ -229,7 +231,7 @@ public sealed class StudioGlbExporter
                 primitive["targets"] = morphTargets.Select(x => x.Attributes).ToArray();
             if (exportMaterials && !string.IsNullOrEmpty(submesh.Material))
             {
-                var materialIndex = GetMaterialIndex(imported, submesh.Material);
+                var materialIndex = GetMaterialIndex(imported, submesh.Material, source);
                 if (materialIndex >= 0) primitive["material"] = materialIndex;
             }
             primitives.Add(primitive);
@@ -330,7 +332,7 @@ public sealed class StudioGlbExporter
         return result;
     }
 
-    private int GetMaterialIndex(IImported imported, string name)
+    private int GetMaterialIndex(IImported imported, string name, ImportedMesh sourceMesh)
     {
         if (materialIndices.TryGetValue(name, out int known)) return known;
         var material = imported.MaterialList?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.Ordinal));
@@ -349,13 +351,15 @@ public sealed class StudioGlbExporter
             ["doubleSided"] = true
         };
 
+        var unsupportedTextures = new List<object>();
         foreach (var texture in material.Textures ?? new List<ImportedMaterialTexture>())
         {
-            if (!textureIndices.TryGetValue(texture.Name ?? string.Empty, out int textureIndex))
+            if (string.IsNullOrWhiteSpace(texture.Name)) continue;
+            if (!textureIndices.TryGetValue(texture.Name, out int textureIndex))
             {
-                var data = textureBytes.TryGetValue(texture.Name ?? string.Empty, out var bytes) ? bytes : null;
+                var data = textureBytes.TryGetValue(texture.Name, out var bytes) ? bytes : null;
                 if (data == null || data.Length == 0) continue;
-                string extension = Path.GetExtension(texture.Name ?? string.Empty).ToLowerInvariant();
+                string extension = Path.GetExtension(texture.Name).ToLowerInvariant();
                 string mime = extension is ".jpg" or ".jpeg" ? "image/jpeg" : extension == ".png" ? "image/png" : string.Empty;
                 if (mime.Length == 0) continue;
                 int view = AddRawBufferView(data, null);
@@ -372,15 +376,76 @@ public sealed class StudioGlbExporter
                     ["sampler"] = 0,
                     ["source"] = imageIndex
                 });
-                textureIndices[texture.Name ?? string.Empty] = textureIndex;
+                textureIndices[texture.Name] = textureIndex;
+            }
+
+            int texCoord = -1;
+            if (sourceMesh.hasUV != null && sourceMesh.uvType != null)
+            {
+                int uvCount = Math.Min(sourceMesh.hasUV.Length, sourceMesh.uvType.Length);
+                for (int uv = 0; uv < uvCount; uv++)
+                {
+                    if (sourceMesh.hasUV[uv] && sourceMesh.uvType[uv] == texture.Dest)
+                    {
+                        texCoord = uv;
+                        break;
+                    }
+                }
             }
 
             var info = new Dictionary<string, object> { ["index"] = textureIndex };
-            if (texture.Dest == 0) pbr["baseColorTexture"] = info;
-            else if (texture.Dest == 1 || texture.Dest == 3) materialJson["normalTexture"] = info;
-            else if (texture.Dest == 2) materialJson["metallicRoughnessTexture"] = info;
+            if (texCoord >= 0) info["texCoord"] = texCoord;
+
+            bool hasTransform = Math.Abs(texture.Offset.X) > 0.000001f ||
+                                Math.Abs(texture.Offset.Y) > 0.000001f ||
+                                Math.Abs(texture.Scale.X - 1f) > 0.000001f ||
+                                Math.Abs(texture.Scale.Y - 1f) > 0.000001f;
+            if (hasTransform)
+            {
+                info["extensions"] = new Dictionary<string, object>
+                {
+                    ["KHR_texture_transform"] = new Dictionary<string, object>
+                    {
+                        ["offset"] = new[] { texture.Offset.X, texture.Offset.Y },
+                        ["scale"] = new[] { texture.Scale.X, texture.Scale.Y }
+                    }
+                };
+                extensionsUsed.Add("KHR_texture_transform");
+            }
+
+            switch (texture.Dest)
+            {
+                case 0:
+                    pbr["baseColorTexture"] = info;
+                    break;
+                case 1:
+                    materialJson["normalTexture"] = info;
+                    break;
+                case 5:
+                    materialJson["emissiveTexture"] = info;
+                    materialJson["emissiveFactor"] = new[]
+                    {
+                        Clamp01(material.Emissive.R), Clamp01(material.Emissive.G), Clamp01(material.Emissive.B)
+                    };
+                    break;
+                default:
+                    unsupportedTextures.Add(new Dictionary<string, object>
+                    {
+                        ["name"] = texture.Name,
+                        ["semantic"] = texture.Dest,
+                        ["textureInfo"] = info
+                    });
+                    break;
+            }
         }
 
+        if (unsupportedTextures.Count > 0)
+        {
+            materialJson["extras"] = new Dictionary<string, object>
+            {
+                ["studioHoKTextureSemantics"] = unsupportedTextures
+            };
+        }
         if (material.Transparency > 0) materialJson["alphaMode"] = "BLEND";
         int index = materials.Count;
         materials.Add(materialJson);
