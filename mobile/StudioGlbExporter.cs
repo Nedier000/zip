@@ -32,6 +32,8 @@ public sealed class StudioGlbExporter
     private readonly Dictionary<ImportedFrame, int> frameIndices = new();
     private readonly Dictionary<string, int> framePathIndices = new(StringComparer.Ordinal);
     private readonly Dictionary<string, byte[]> textureBytes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<GlbMorphTarget>> morphTargetsByPath = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> meshNodeByPath = new(StringComparer.Ordinal);
 
     public StudioGlbExporter()
     {
@@ -191,6 +193,10 @@ public sealed class StudioGlbExporter
             }
         }
 
+        var morphTargets = BuildMorphTargets(imported, source, vertices);
+        if (morphTargets.Count > 0)
+            morphTargetsByPath[source.Path] = morphTargets.Select(x => new GlbMorphTarget(x.Name, x.FrameWeight)).ToList();
+
         int? skinIndex = null;
         if (exportSkins && source.BoneList?.Count > 0)
         {
@@ -219,6 +225,8 @@ public sealed class StudioGlbExporter
                 ["indices"] = AddUIntAccessor(indices.ToArray(), "SCALAR", 34963),
                 ["mode"] = 4
             };
+            if (morphTargets.Count > 0)
+                primitive["targets"] = morphTargets.Select(x => x.Attributes).ToArray();
             if (exportMaterials && !string.IsNullOrEmpty(submesh.Material))
             {
                 var materialIndex = GetMaterialIndex(imported, submesh.Material);
@@ -229,11 +237,20 @@ public sealed class StudioGlbExporter
         if (primitives.Count == 0) return;
 
         int meshIndex = meshes.Count;
-        meshes.Add(new Dictionary<string, object>
+        var meshJson = new Dictionary<string, object>
         {
             ["name"] = SafeName(source.Path),
             ["primitives"] = primitives
-        });
+        };
+        if (morphTargets.Count > 0)
+        {
+            meshJson["weights"] = Enumerable.Repeat(0f, morphTargets.Count).ToArray();
+            meshJson["extras"] = new Dictionary<string, object>
+            {
+                ["targetNames"] = morphTargets.Select(x => x.Name).ToArray()
+            };
+        }
+        meshes.Add(meshJson);
 
         int frameIndex = FindFrameIndex(source.Path);
         if (frameIndex < 0) frameIndex = 0;
@@ -246,6 +263,8 @@ public sealed class StudioGlbExporter
 
         int meshNodeIndex = nodes.Count;
         nodes.Add(meshNode);
+        if (!string.IsNullOrEmpty(source.Path))
+            meshNodeByPath[source.Path] = meshNodeIndex;
         var frameNode = (Dictionary<string, object?>)nodes[frameIndex];
         if (frameNode.TryGetValue("children", out var existing) && existing is List<int> children)
             children.Add(meshNodeIndex);
@@ -299,14 +318,12 @@ public sealed class StudioGlbExporter
 
         attributes["JOINTS_0"] = AddUShortAccessor(joints, 4, "VEC4", 34962);
         attributes["WEIGHTS_0"] = AddFloatAccessor(weights, 4, "VEC4", 34962);
-        int matrixAccessor = AddFloatAccessor(inverseBind.ToArray(), 16, "MAT4", 34962);
-        int skeletonRoot = jointNodes[0];
+        int matrixAccessor = AddFloatAccessor(inverseBind.ToArray(), 16, "MAT4");
         var skin = new Dictionary<string, object>
         {
             ["name"] = SafeName(mesh.Path) + "_Skin",
             ["joints"] = jointNodes,
-            ["inverseBindMatrices"] = matrixAccessor,
-            ["skeleton"] = skeletonRoot
+            ["inverseBindMatrices"] = matrixAccessor
         };
         int result = skins.Count;
         skins.Add(skin);
@@ -388,6 +405,7 @@ public sealed class StudioGlbExporter
                     v => new[] { v.X, v.Y, v.Z, v.W });
                 AddAnimationChannel(track.Scalings, "scale", 3, nodeIndex, samplers, channels,
                     v => new[] { v.X, v.Y, v.Z });
+                AddMorphAnimationChannel(track.BlendShape, track.Path, animation, samplers, channels);
             }
             if (channels.Count == 0) continue;
             animations.Add(new Dictionary<string, object>
@@ -418,8 +436,8 @@ public sealed class StudioGlbExporter
 
         var times = sorted.Select(x => Math.Max(0, x.time)).ToArray();
         var output = sorted.SelectMany(x => values(x.value)).ToArray();
-        int inputAccessor = AddFloatAccessor(times, 1, "SCALAR", 34962, includeBounds: true);
-        int outputAccessor = AddFloatAccessor(output, componentCount, componentCount == 4 ? "VEC4" : "VEC3", 34962);
+        int inputAccessor = AddFloatAccessor(times, 1, "SCALAR", includeBounds: true);
+        int outputAccessor = AddFloatAccessor(output, componentCount, componentCount == 4 ? "VEC4" : "VEC3");
         int samplerIndex = samplers.Count;
         samplers.Add(new Dictionary<string, object>
         {
