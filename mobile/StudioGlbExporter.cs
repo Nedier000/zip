@@ -202,7 +202,7 @@ public sealed class StudioGlbExporter
             ? BuildMorphTargets(imported, source, vertices)
             : new List<GlbMorphTargetData>();
         if (morphTargets.Count > 0)
-            morphTargetsByPath[source.Path] = morphTargets.Select(x => new GlbMorphTarget(x.Name, x.FrameWeight)).ToList();
+            morphTargetsByPath[source.Path] = morphTargets.Select(x => new GlbMorphTarget(x.Name, x.ChannelName, x.FrameWeight)).ToList();
 
         int? skinIndex = null;
         if (exportSkins && source.BoneList?.Count > 0)
@@ -462,6 +462,197 @@ public sealed class StudioGlbExporter
         return index;
     }
 
+    private List<GlbMorphTargetData> BuildMorphTargets(
+        IImported imported,
+        ImportedMesh source,
+        List<ImportedVertex> baseVertices)
+    {
+        var result = new List<GlbMorphTargetData>();
+        var morph = imported.MorphList?.FirstOrDefault(x => string.Equals(x.Path, source.Path, StringComparison.Ordinal));
+        if (morph?.Channels == null) return result;
+
+        foreach (var channel in morph.Channels)
+        {
+            if (channel?.KeyframeList == null) continue;
+            foreach (var keyframe in channel.KeyframeList)
+            {
+                var positions = new float[baseVertices.Count * 3];
+                float[]? normals = keyframe.hasNormals ? new float[baseVertices.Count * 3] : null;
+                float[]? tangents = keyframe.hasTangents ? new float[baseVertices.Count * 3] : null;
+
+                foreach (var entry in keyframe.VertexList ?? new List<ImportedMorphVertex>())
+                {
+                    if (entry == null || entry.Vertex == null || entry.Index >= baseVertices.Count) continue;
+                    int index = checked((int)entry.Index);
+                    var baseVertex = baseVertices[index];
+                    var targetVertex = entry.Vertex;
+                    positions[index * 3] = (targetVertex.Vertex.X - baseVertex.Vertex.X) * exportScale;
+                    positions[index * 3 + 1] = (targetVertex.Vertex.Y - baseVertex.Vertex.Y) * exportScale;
+                    positions[index * 3 + 2] = (targetVertex.Vertex.Z - baseVertex.Vertex.Z) * exportScale;
+                    if (normals != null)
+                    {
+                        normals[index * 3] = targetVertex.Normal.X;
+                        normals[index * 3 + 1] = targetVertex.Normal.Y;
+                        normals[index * 3 + 2] = targetVertex.Normal.Z;
+                    }
+                    if (tangents != null)
+                    {
+                        tangents[index * 3] = targetVertex.Tangent.X;
+                        tangents[index * 3 + 1] = targetVertex.Tangent.Y;
+                        tangents[index * 3 + 2] = targetVertex.Tangent.Z;
+                    }
+                }
+
+                var attributes = new Dictionary<string, object>
+                {
+                    ["POSITION"] = AddFloatAccessor(positions, 3, "VEC3")
+                };
+                if (normals != null) attributes["NORMAL"] = AddFloatAccessor(normals, 3, "VEC3");
+                if (tangents != null) attributes["TANGENT"] = AddFloatAccessor(tangents, 3, "VEC3");
+
+                string name = channel.Name + "@" + keyframe.Weight.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+                result.Add(new GlbMorphTargetData(name, channel.Name, keyframe.Weight, attributes));
+            }
+        }
+        return result;
+    }
+
+    private void AddMorphAnimationChannels(
+        ImportedKeyframedAnimation animation,
+        List<object> samplers,
+        List<object> channels)
+    {
+        var tracks = (animation.TrackList ?? new List<ImportedAnimationKeyframedTrack>())
+            .Where(track => track.BlendShape?.Keyframes?.Count > 0 &&
+                           !string.IsNullOrWhiteSpace(track.Path) &&
+                           morphTargetsByPath.ContainsKey(track.Path) &&
+                           meshNodeByPath.ContainsKey(track.Path))
+            .GroupBy(track => track.Path, StringComparer.Ordinal);
+
+        foreach (var group in tracks)
+        {
+            string path = group.Key;
+            var targets = morphTargetsByPath[path];
+            int nodeIndex = meshNodeByPath[path];
+            var blendTracks = group.ToArray();
+
+            var times = blendTracks
+                .SelectMany(track => track.BlendShape!.Keyframes)
+                .Where(key => float.IsFinite(key.time))
+                .Select(key => Math.Max(0, key.time))
+                .Distinct()
+                .OrderBy(time => time)
+                .ToArray();
+            if (times.Length == 0 || targets.Count == 0) continue;
+
+            var output = new float[checked(times.Length * targets.Count)];
+            foreach (var track in blendTracks)
+            {
+                var shape = track.BlendShape!;
+                var shapeTargets = targets
+                    .Select((target, index) => (target, index))
+                    .Where(item => string.Equals(item.target.ChannelName, shape.ChannelName, StringComparison.Ordinal))
+                    .OrderBy(item => item.target.FrameWeight)
+                    .ToArray();
+                if (shapeTargets.Length == 0) continue;
+
+                var keys = shape.Keyframes
+                    .Where(key => float.IsFinite(key.time) && float.IsFinite(key.value))
+                    .OrderBy(key => key.time)
+                    .GroupBy(key => key.time)
+                    .Select(keyGroup => keyGroup.Last())
+                    .ToArray();
+                if (keys.Length == 0) continue;
+
+                for (int timeIndex = 0; timeIndex < times.Length; timeIndex++)
+                {
+                    float value = EvaluateFloatKeys(keys, times[timeIndex]);
+                    WriteBlendShapeWeights(
+                        output, timeIndex * targets.Count, shapeTargets, value);
+                }
+            }
+
+            int inputAccessor = AddFloatAccessor(times, 1, "SCALAR", includeBounds: true);
+            int outputAccessor = AddFloatAccessor(output, 1, "SCALAR");
+            int samplerIndex = samplers.Count;
+            samplers.Add(new Dictionary<string, object>
+            {
+                ["input"] = inputAccessor,
+                ["output"] = outputAccessor,
+                ["interpolation"] = "LINEAR"
+            });
+            channels.Add(new Dictionary<string, object>
+            {
+                ["sampler"] = samplerIndex,
+                ["target"] = new Dictionary<string, object>
+                {
+                    ["node"] = nodeIndex,
+                    ["path"] = "weights"
+                }
+            });
+        }
+    }
+
+    private static float EvaluateFloatKeys(ImportedKeyframe<float>[] keys, float time)
+    {
+        if (keys.Length == 1 || time <= keys[0].time) return keys[0].value;
+        if (time >= keys[^1].time) return keys[^1].value;
+        for (int i = 1; i < keys.Length; i++)
+        {
+            if (time > keys[i].time) continue;
+            float span = keys[i].time - keys[i - 1].time;
+            if (span <= 0) return keys[i].value;
+            float factor = Math.Clamp((time - keys[i - 1].time) / span, 0f, 1f);
+            return keys[i - 1].value + (keys[i].value - keys[i - 1].value) * factor;
+        }
+        return keys[^1].value;
+    }
+
+    private static void WriteBlendShapeWeights(
+        float[] output,
+        int offset,
+        (GlbMorphTarget target, int index)[] targets,
+        float value)
+    {
+        if (targets.Length == 1)
+        {
+            float fullWeight = targets[0].target.FrameWeight;
+            output[offset + targets[0].index] = fullWeight <= 0
+                ? (value >= 0 ? 1f : 0f)
+                : Math.Clamp(value / fullWeight, 0f, 1f);
+            return;
+        }
+
+        float first = targets[0].target.FrameWeight;
+        float last = targets[^1].target.FrameWeight;
+        if (value <= first)
+        {
+            float weight = first <= 0 ? (value >= first ? 1f : 0f) : Math.Clamp(value / first, 0f, 1f);
+            output[offset + targets[0].index] = weight;
+            return;
+        }
+        if (value >= last)
+        {
+            output[offset + targets[^1].index] = 1f;
+            return;
+        }
+
+        for (int i = 1; i < targets.Length; i++)
+        {
+            if (value > targets[i].target.FrameWeight) continue;
+            var left = targets[i - 1];
+            var right = targets[i];
+            float span = right.target.FrameWeight - left.target.FrameWeight;
+            float factor = span <= 0 ? 0f : Math.Clamp((value - left.target.FrameWeight) / span, 0f, 1f);
+            output[offset + left.index] = 1f - factor;
+            output[offset + right.index] = factor;
+            return;
+        }
+    }
+
+    private sealed record GlbMorphTarget(string Name, string ChannelName, float FrameWeight);
+    private sealed record GlbMorphTargetData(string Name, string ChannelName, float FrameWeight, Dictionary<string, object> Attributes);
+
     private void AddAnimations(IImported imported)
     {
         foreach (var animation in imported.AnimationList ?? new List<ImportedKeyframedAnimation>())
@@ -479,8 +670,8 @@ public sealed class StudioGlbExporter
                     v => new[] { v.X, v.Y, v.Z, v.W });
                 AddAnimationChannel(track.Scalings, "scale", 3, nodeIndex, samplers, channels,
                     v => new[] { v.X, v.Y, v.Z });
-                AddMorphAnimationChannel(track.BlendShape, track.Path, animation, samplers, channels);
             }
+            AddMorphAnimationChannels(animation, samplers, channels);
             if (channels.Count == 0) continue;
             animations.Add(new Dictionary<string, object>
             {
