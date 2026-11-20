@@ -27,7 +27,8 @@ public sealed class StudioWorkspaceService : IDisposable
         string? unityVersion = null,
         bool resolveDependencies = true,
         bool skipProcess = false,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        int selectedGame = (int)GameType.HonorOfKings)
     {
         string[] files = NormalizeFiles(paths);
         if (files.Length == 0) throw new ArgumentException("No input files were selected.", nameof(paths));
@@ -35,7 +36,7 @@ public sealed class StudioWorkspaceService : IDisposable
         lock (sync)
         {
             ResetCore();
-            manager = CreateManager(unityVersion, resolveDependencies, skipProcess);
+            manager = CreateManager(unityVersion, resolveDependencies, skipProcess, selectedGame);
             log?.Invoke($"Loading {files.Length} input file(s) with the Honor of Kings profile.");
             manager.LoadFiles(files);
             log?.Invoke($"Loaded {manager.assetsFileList.Count} SerializedFile(s).");
@@ -47,7 +48,8 @@ public sealed class StudioWorkspaceService : IDisposable
         string? unityVersion = null,
         bool resolveDependencies = true,
         bool skipProcess = false,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        int selectedGame = (int)GameType.HonorOfKings)
     {
         if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
             throw new DirectoryNotFoundException(folder);
@@ -55,7 +57,7 @@ public sealed class StudioWorkspaceService : IDisposable
         lock (sync)
         {
             ResetCore();
-            manager = CreateManager(unityVersion, resolveDependencies, skipProcess);
+            manager = CreateManager(unityVersion, resolveDependencies, skipProcess, selectedGame);
             log?.Invoke("Loading folder recursively with the Honor of Kings profile.");
             manager.LoadFolder(Path.GetFullPath(folder));
             log?.Invoke($"Loaded {manager.assetsFileList.Count} SerializedFile(s).");
@@ -242,11 +244,11 @@ public sealed class StudioWorkspaceService : IDisposable
             outputFolder);
     }
 
-    private AssetsManager CreateManager(string? unityVersion, bool resolveDependencies, bool skipProcess)
+    private AssetsManager CreateManager(string? unityVersion, bool resolveDependencies, bool skipProcess, int selectedGame)
     {
         return new AssetsManager
         {
-            Game = GameManager.GetGame(GameType.HonorOfKings),
+            Game = GameManager.GetGame(selectedGame),
             SpecifyUnityVersion = unityVersion ?? string.Empty,
             Silent = true,
             SkipProcess = skipProcess,
