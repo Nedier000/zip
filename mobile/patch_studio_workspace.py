@@ -70,13 +70,13 @@ replacement = r'''    private readonly StudioWorkspaceService workspace = new();
 
     public StudioBulkExportResult ExportSelectedModels(
         IEnumerable<AssetEntry> selected, string outputFolder, StudioMobileSettings settings,
-        bool merge, System.Threading.CancellationToken cancellationToken,
+        bool merge, bool includeSelectedAnimations, System.Threading.CancellationToken cancellationToken,
         IProgress<string>? progress = null)
     {
         if (selected == null) throw new ArgumentNullException(nameof(selected));
         var instances = selected.Where(x => x?.Instance != null).Select(x => x.Instance).ToArray();
         return StudioMobileExportService.ExportModelSet(
-            instances, outputFolder, settings, merge, cancellationToken, progress);
+            instances, outputFolder, settings, merge, includeSelectedAnimations, cancellationToken, progress);
     }
 
     public StudioBulkExportResult ExportAllAssets(
