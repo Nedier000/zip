@@ -104,7 +104,8 @@ if "ShowAssetClasses();" not in main:
 
 # Apply the persisted Unity version and dependency-resolution preferences.
 old_scan = "var result = await Task.Run(() => assetBrowser.Scan(input), token);"
-new_scan = """var result = await Task.Run(
+new_scan = """mobileSettings.ApplyCoreSettings();
+            var result = await Task.Run(
                 () => assetBrowser.Scan(input, WriteStatus, mobileSettings.specifyUnityVersion,
                     mobileSettings.enableResolveDependencies, mobileSettings.selectedGame), token);
             var workspacePanels = await Task.Run(
