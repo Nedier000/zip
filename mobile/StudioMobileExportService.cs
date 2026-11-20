@@ -90,8 +90,9 @@ public static class StudioMobileExportService
 
                 try
                 {
-                    string path = StudioModelExportService.ExportGameObject(
-                        model, groupFolder, settings);
+                    string path = row.Instance is Animator animator
+                        ? StudioModelExportService.ExportAnimator(animator, groupFolder, settings)
+                        : StudioModelExportService.ExportGameObject(model, groupFolder, settings);
                     progress?.Report($"Model {exported + 1:N0}/{rows.Length:N0}: {Path.GetFileName(path)}");
                     exported++;
                 }
