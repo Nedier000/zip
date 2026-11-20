@@ -51,6 +51,8 @@ public sealed class StudioMobileSettings
     public string types { get; set; } = "{}";
     public string texs { get; set; } = "{}";
     public bool exportMaterials { get; set; } = true;
+    public string specifyUnityVersion { get; set; } = string.Empty;
+    public string selectedAIVersion { get; set; } = string.Empty;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
