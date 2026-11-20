@@ -62,11 +62,11 @@ replacement = r'''    private readonly StudioWorkspaceService workspace = new();
     public void ExportClassGroups(string outputFolder) => workspace.ExportClassGroups(outputFolder);
     public void Clear() => workspace.Reset();
     public StudioBulkExportResult ExportSceneModels(
-        string outputFolder, StudioMobileSettings settings,
+        IEnumerable<StudioSceneNode> roots, string outputFolder, StudioMobileSettings settings,
         System.Threading.CancellationToken cancellationToken,
         IProgress<string>? progress = null)
         => StudioMobileExportService.ExportSceneRoots(
-            workspace.GetSceneHierarchy(), outputFolder, settings, cancellationToken, progress);
+            roots ?? Array.Empty<StudioSceneNode>(), outputFolder, settings, cancellationToken, progress);
 
     public StudioBulkExportResult ExportAllAssets(
         string outputFolder, StudioMobileSettings settings,
@@ -112,6 +112,7 @@ if "private IReadOnlyList<StudioSceneNode> sceneRoots" not in main:
         anchor + "\n"
         "    private readonly StudioMobileSettings mobileSettings = StudioMobileSettings.Load();\n"
         "    private IReadOnlyList<StudioSceneNode> sceneRoots = Array.Empty<StudioSceneNode>();\n"
+        "    private IReadOnlyList<StudioSceneNode> selectedSceneRoots = Array.Empty<StudioSceneNode>();\n"
         "    private IReadOnlyList<StudioClassGroup> classGroups = Array.Empty<StudioClassGroup>();",
         1
     )
@@ -179,7 +180,7 @@ methods = r"""
 
     private void ShowSceneHierarchy()
     {
-        StudioMobilePanels.ShowSceneHierarchy(this, sceneRoots);
+        StudioMobilePanels.ShowSceneHierarchy(this, sceneRoots, selected => selectedSceneRoots = selected);
     }
 
     private void ShowAssetClasses()
