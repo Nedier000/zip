@@ -260,6 +260,7 @@ public static class StudioMobileExportService
         string outputFolder,
         StudioMobileSettings settings,
         bool merge,
+        bool includeSelectedAnimations = false,
         CancellationToken cancellationToken = default,
         IProgress<string>? progress = null)
     {
@@ -296,7 +297,7 @@ public static class StudioMobileExportService
             return new StudioBulkExportResult(selected.Length, 0, selected.Length,
                 new[] { "No selected GameObject / Animator contains a mesh." });
 
-        AnimationClip[]? clipArray = animationClips.Length == 0 ? null : animationClips;
+        AnimationClip[]? clipArray = includeSelectedAnimations && animationClips.Length > 0 ? animationClips : null;
         if (merge)
         {
             cancellationToken.ThrowIfCancellationRequested();
