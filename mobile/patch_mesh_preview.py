@@ -17,27 +17,38 @@ old = """            var bitmap = AssetBrowser.CreatePreviewBitmap(entry);
             {
                 layout.AddView(Text("Loại asset này không có xem trước hình ảnh. Dùng nút Xuất để lưu dữ liệu.", 12, "#64748B"));
             }"""
-new = """            var previewMesh = ResolveMeshForPreview(entry.Instance);
-            if (previewMesh != null)
+new = """            if (entry.Instance is AssetStudio.AudioClip)
             {
-                var modelView = new StudioMeshPreviewView(this, previewMesh);
-                layout.AddView(modelView, new LinearLayout.LayoutParams(-1, Dp(340)));
-                layout.AddView(Text("Xoay bằng một ngón tay · thu phóng bằng hai ngón tay · preview Mesh tĩnh.", 11, "#64748B"));
+                string audioFolder = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "audio_preview");
+                Directory.CreateDirectory(audioFolder);
+                string audioPath = AssetBrowser.Export(entry, audioFolder);
+                var audioView = new StudioAudioPreviewView(this, audioPath);
+                layout.AddView(audioView, new LinearLayout.LayoutParams(-1, Dp(300)));
             }
             else
             {
-                var bitmap = AssetBrowser.CreatePreviewBitmap(entry);
-                if (bitmap != null)
+                var previewMesh = ResolveMeshForPreview(entry.Instance);
+                if (previewMesh != null)
                 {
-                    var image = new ImageView(this);
-                    image.SetAdjustViewBounds(true);
-                    image.SetScaleType(ImageView.ScaleType.FitCenter);
-                    image.SetImageBitmap(bitmap);
-                    layout.AddView(image, new LinearLayout.LayoutParams(-1, Dp(280)));
+                    var modelView = new StudioMeshPreviewView(this, previewMesh);
+                    layout.AddView(modelView, new LinearLayout.LayoutParams(-1, Dp(340)));
+                    layout.AddView(Text("Xoay bằng một ngón tay · thu phóng bằng hai ngón tay · preview Mesh tĩnh.", 11, "#64748B"));
                 }
                 else
                 {
-                    layout.AddView(Text("Loại asset này chưa có preview trực quan. Dùng nút Xuất để lưu dữ liệu.", 12, "#64748B"));
+                    var bitmap = AssetBrowser.CreatePreviewBitmap(entry);
+                    if (bitmap != null)
+                    {
+                        var image = new ImageView(this);
+                        image.SetAdjustViewBounds(true);
+                        image.SetScaleType(ImageView.ScaleType.FitCenter);
+                        image.SetImageBitmap(bitmap);
+                        layout.AddView(image, new LinearLayout.LayoutParams(-1, Dp(280)));
+                    }
+                    else
+                    {
+                        layout.AddView(Text("Loại asset này chưa có preview trực quan. Dùng nút Xuất để lưu dữ liệu.", 12, "#64748B"));
+                    }
                 }
             }"""
 if old in s:
