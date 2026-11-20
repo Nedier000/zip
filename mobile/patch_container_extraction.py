@@ -49,6 +49,7 @@ method = r"""
             if (Directory.Exists(output)) Directory.Delete(output, true);
             Directory.CreateDirectory(output);
 
+            mobileSettings.ApplyCoreSettings();
             var extractor = new StudioContainerExtractor(AssetStudio.GameManager.GetGame(mobileSettings.selectedGame));
             var extractProgress = new Progress<ContainerExtractionProgress>(
                 p => WriteStatus(p.Message + $" · {p.FilesWritten:N0} file"));
