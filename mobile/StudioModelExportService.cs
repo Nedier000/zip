@@ -110,7 +110,11 @@ public static class StudioModelExportService
             if (!uvs.ContainsKey(key)) uvs[key] = (i < 2, i == 1 ? 1 : 0);
         }
 
-        if (!Enum.TryParse<ImageFormat>(settings.convertType, true, out var imageFormat))
+        // glTF 2.0 core requires PNG or JPEG images. TGA/BMP are useful
+        // for standalone texture export but cannot be embedded as core GLB images.
+        if (string.Equals(settings.convertType, "Jpeg", StringComparison.OrdinalIgnoreCase))
+            imageFormat = ImageFormat.Jpeg;
+        else
             imageFormat = ImageFormat.Png;
 
         return new ModelConverter.Options
