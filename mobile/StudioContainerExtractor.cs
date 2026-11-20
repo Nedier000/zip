@@ -53,7 +53,8 @@ public sealed class StudioContainerExtractor
             try
             {
                 using var reader = new FileReader(file);
-                ExtractReader(reader.PreProcessing(game), destination, result, cancellationToken, 0);
+                using var prepared = reader.PreProcessing(game);
+                ExtractReader(prepared, destination, result, cancellationToken, 0);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -214,7 +215,8 @@ public sealed class StudioContainerExtractor
             }
 
             using var nested = new FileReader(temp);
-            ExtractReader(nested.PreProcessing(game), destination, result, token, depth + 1);
+            using var prepared = nested.PreProcessing(game);
+            ExtractReader(prepared, destination, result, token, depth + 1);
         }
         finally
         {
@@ -235,7 +237,7 @@ public sealed class StudioContainerExtractor
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
             using var output = new FileStream(UniquePath(outputPath), FileMode.CreateNew, FileAccess.Write, FileShare.None);
             input.CopyTo(output);
-            result.AddFile(new FileInfo(output.Name).Length);
+            result.AddFile(output.Length);
         }
     }
 
@@ -255,7 +257,7 @@ public sealed class StudioContainerExtractor
                 string outputPath = SafeEntryPath(destination, relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
                 outputPath = UniquePath(outputPath);
-                file.stream.Position = 0;
+                if (file.stream.CanSeek) file.stream.Position = 0;
                 using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
                 file.stream.CopyTo(output);
                 result.AddFile(output.Length);
