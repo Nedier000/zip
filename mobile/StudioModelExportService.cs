@@ -26,7 +26,7 @@ public static class StudioModelExportService
         string name = SafeName(string.IsNullOrWhiteSpace(gameObject.Name) ? "GameObject" : gameObject.Name);
         string outputPath = GetUniquePath(outputFolder, name + ".glb");
         var exporter = new StudioGlbExporter();
-        exporter.Export(outputPath, converted, settings.exportSkins, settings.exportAnimations, settings.exportMaterials);
+        exporter.Export(outputPath, converted, settings.exportSkins, settings.exportAnimations, settings.exportMaterials, settings.exportBlendShape, (float)settings.scaleFactor);
         return outputPath;
     }
 
