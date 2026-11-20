@@ -60,6 +60,80 @@ public static class StudioMobileMapService
         return path;
     }
 
+    public static async Task<(string Path, int AssetCount)> DownloadAndLoadAIAsync(string version)
+    {
+        string path = await DownloadAIAsync(version).ConfigureAwait(false);
+        await Task.Run(() => ResourceIndex.FromFile(path)).ConfigureAwait(false);
+        int count = ResourceIndex.GetAssetCount();
+        if (count <= 0)
+            throw new InvalidDataException($"AI index '{version}' downloaded but contained no readable asset entries.");
+        return (path, count);
+    }
+
+    public static int GetLoadedAIAssetCount()
+    {
+        EnsureInitialized();
+        return ResourceIndex.GetAssetCount();
+    }
+
+    public static async Task<string> BuildCABMapAsync(string inputFolder, string mapName, int selectedGame)
+    {
+        EnsureInitialized();
+        if (string.IsNullOrWhiteSpace(inputFolder) || !Directory.Exists(inputFolder))
+            throw new DirectoryNotFoundException(inputFolder);
+        if (string.IsNullOrWhiteSpace(mapName)) throw new ArgumentException("Map name is empty.", nameof(mapName));
+
+        string safeName = SafeName(mapName);
+        string output = Path.Combine(dataRoot!, AssetsHelper.MapName, safeName + ".bin");
+        if (File.Exists(output)) File.Delete(output);
+
+        string[] files = Directory.EnumerateFiles(inputFolder, "*", SearchOption.AllDirectories)
+            .Where(path => !path.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (files.Length == 0) throw new InvalidDataException("The selected game folder contains no files.");
+
+        await Task.Run(() => AssetsHelper.BuildCABMap(
+            files, safeName, Path.GetFullPath(inputFolder), GameManager.GetGame(selectedGame))).ConfigureAwait(false);
+
+        if (!File.Exists(output) || new FileInfo(output).Length < sizeof(int))
+            throw new InvalidDataException("CABMap builder did not produce a valid output file.");
+        return output;
+    }
+
+    public static async Task<IReadOnlyList<string>> BuildBothAsync(
+        string inputFolder, string mapName, int selectedGame, string assetMapOutput, ExportListType exportType)
+    {
+        EnsureInitialized();
+        if (string.IsNullOrWhiteSpace(inputFolder) || !Directory.Exists(inputFolder))
+            throw new DirectoryNotFoundException(inputFolder);
+        if (string.IsNullOrWhiteSpace(mapName)) throw new ArgumentException("Map name is empty.", nameof(mapName));
+        if (string.IsNullOrWhiteSpace(assetMapOutput)) throw new ArgumentException("Output folder is empty.", nameof(assetMapOutput));
+
+        string safeName = SafeName(mapName);
+        Directory.CreateDirectory(assetMapOutput);
+        string cabPath = Path.Combine(dataRoot!, AssetsHelper.MapName, safeName + ".bin");
+        if (File.Exists(cabPath)) File.Delete(cabPath);
+
+        string[] files = Directory.EnumerateFiles(inputFolder, "*", SearchOption.AllDirectories)
+            .Where(path => !path.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (files.Length == 0) throw new InvalidDataException("The selected game folder contains no files.");
+
+        await AssetsHelper.BuildBoth(
+            files, safeName, Path.GetFullPath(inputFolder), GameManager.GetGame(selectedGame),
+            assetMapOutput, exportType).ConfigureAwait(false);
+
+        if (!File.Exists(cabPath))
+            throw new InvalidDataException("BuildBoth did not produce the CABMap file.");
+        var results = Directory.EnumerateFiles(assetMapOutput, "*", SearchOption.AllDirectories).ToList();
+        if (results.Count == 0)
+            throw new InvalidDataException("BuildBoth created the CABMap but did not export AssetMap files.");
+        results.Add(cabPath);
+        return results;
+    }
+
     public static IReadOnlyList<string> GetCABMaps()
     {
         EnsureInitialized();
