@@ -70,6 +70,15 @@ public static class StudioMobileMapService
         return (path, count);
     }
 
+    public static async Task<(string Path, int AssetCount)> LoadSelectedAIAsync(string version)
+    {
+        EnsureInitialized();
+        if (string.IsNullOrWhiteSpace(version)) throw new ArgumentException(nameof(version));
+        if (!await AIVersionManager.FetchVersions().ConfigureAwait(false))
+            throw new IOException("AI version index is unavailable and no valid cache could be read.");
+        return await DownloadAndLoadAIAsync(version).ConfigureAwait(false);
+    }
+
     public static int GetLoadedAIAssetCount()
     {
         EnsureInitialized();
