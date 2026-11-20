@@ -5,8 +5,50 @@ if not p.is_file():
     raise SystemExit("mobile/MainActivity.cs missing after restoring Android payload")
 s = p.read_text(encoding="utf-8")
 
+# MainActivity shared state for the explicit Build workflow.
+old_uris = "private Uri? dbInputUri, dbOutputUri, assetInputUri, assetOutputUri;"
+new_uris = "private Uri? dbInputUri, dbOutputUri, assetInputUri, assetOutputUri, buildBundleUri, buildSerializedUri;"
+if old_uris in s: s = s.replace(old_uris, new_uris, 1)
+elif new_uris not in s: raise SystemExit("Could not locate URI state fields")
+
+old_texts = "private TextView? statusText, dbInputText, dbOutputText, assetInputText, assetOutputText, summaryText, selectedText;"
+new_texts = "private TextView? statusText, dbInputText, dbOutputText, assetInputText, assetOutputText, summaryText, selectedText, buildBundleText, buildSerializedText;"
+if old_texts in s: s = s.replace(old_texts, new_texts, 1)
+elif new_texts not in s: raise SystemExit("Could not locate Build status label fields")
+
+old_list = "assetList = new ListView(this)"
+new_list = "assetList = new AssetListView(this)"
+if old_list in s: s = s.replace(old_list, new_list, 1)
+elif new_list not in s: raise SystemExit("Could not locate AssetStudio ListView creation")
+
+build_anchor = '        body.AddView(SectionTitle("03  ·  GHI CHÚ TÍNH NĂNG"));'
+build_ui = """        body.AddView(SectionTitle("03  ·  BUILD / REPACK ASSETBUNDLE"));
+        var buildCard = Card();
+        buildCard.AddView(Text("Trích SerializedFile (.assets/CAB-*), chỉnh sửa bằng công cụ phù hợp, sau đó thay lại đúng entry trong UnityFS gốc. Kích thước file .assets phải giữ nguyên để không làm lệch offset.", 13, "#475569"));
+        buildBundleText = Text("Bundle gốc: chưa chọn", 12, "#64748B");
+        buildCard.AddView(buildBundleText);
+        AddButton(buildCard, "CHỌN UNITYFS GỐC", "#E8EEF8", "#1E3A5F", () => PickBuildFile(PickBuildBundleRequest));
+        buildSerializedText = Text("SerializedFile đã sửa: chưa chọn", 12, "#64748B");
+        buildCard.AddView(buildSerializedText);
+        AddButton(buildCard, "CHỌN .ASSETS ĐÃ SỬA", "#E8EEF8", "#1E3A5F", () => PickBuildFile(PickBuildSerializedRequest));
+        AddButton(buildCard, "TRÍCH .ASSETS RA KHỎI UNITYFS", "#0F766E", "#FFFFFF", async () => await ExtractBundleSerializedFilesAsync());
+        AddButton(buildCard, "BUILD / REPACK ASSETBUNDLE", "#1D4ED8", "#FFFFFF", async () => await BuildAssetBundleAsync());
+        body.AddView(buildCard);
+
+        body.AddView(SectionTitle("04  ·  GHI CHÚ TÍNH NĂNG"));"""
+if build_anchor in s: s = s.replace(build_anchor, build_ui, 1)
+elif "BUILD / REPACK ASSETBUNDLE" not in s: raise SystemExit("Could not insert visible Build panel")
+
+old_switch = '            case PickAssetOutput: assetOutputUri = uri; assetOutputText!.Text = "Đích: " + uri.LastPathSegment; break;'
+new_switch = old_switch + """
+            case PickBuildBundleRequest: buildBundleUri = uri; buildBundleText!.Text = "Bundle gốc: " + uri.LastPathSegment; break;
+            case PickBuildSerializedRequest: buildSerializedUri = uri; buildSerializedText!.Text = "SerializedFile đã sửa: " + uri.LastPathSegment; break;"""
+if old_switch in s: s = s.replace(old_switch, new_switch, 1)
+elif "case PickBuildBundleRequest:" not in s: raise SystemExit("Could not add Build file-picker results")
+
+
 old_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004;"
-new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImageRequest = 1005, PickAudioFileRequest = 1006, PickTextureRawRequest = 1007, PickMeshObjRequest = 1008;"
+new_const = "private const int PickDbInput = 1001, PickDbOutput = 1002, PickAssetInput = 1003, PickAssetOutput = 1004, PickTextureImageRequest = 1005, PickAudioFileRequest = 1006, PickTextureRawRequest = 1007, PickMeshObjRequest = 1008, PickBuildBundleRequest = 1009, PickBuildSerializedRequest = 1010;"
 if old_const in s:
     s = s.replace(old_const, new_const, 1)
 elif new_const not in s:
@@ -476,6 +518,87 @@ methods = r"""
                 new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất Material {p.done}: {p.name}")), token);
             WriteStatus("Đã tạo bản Material đã sửa: " + Path.GetFileName(written) +
                 ". Chỉ sửa float/color có sẵn; shader, texture pointer và keyword được giữ nguyên.");
+        });
+    }
+
+"""
+methods += r"""
+    private void PickBuildFile(int requestCode)
+    {
+        if (busy) return;
+        var intent = new Intent(Intent.ActionOpenDocument);
+        intent.AddCategory(Intent.CategoryOpenable);
+        intent.SetType("*/*");
+        intent.AddFlags(ActivityFlags.GrantReadUriPermission | ActivityFlags.GrantPersistableUriPermission);
+        StartActivityForResult(intent, requestCode);
+    }
+
+    private async Task<string> CopyPickedUriToLocalAsync(Uri uri, string destination, CancellationToken token)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        using var source = ContentResolver!.OpenInputStream(uri)
+            ?? throw new IOException("Không mở được file đã chọn.");
+        await using var output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None);
+        await source.CopyToAsync(output, 1024 * 1024, token);
+        await output.FlushAsync(token);
+        if (new FileInfo(destination).Length == 0)
+            throw new InvalidDataException("File được chọn rỗng.");
+        return destination;
+    }
+
+    private async Task ExtractBundleSerializedFilesAsync()
+    {
+        if (buildBundleUri == null || assetOutputUri == null)
+        {
+            Toast.MakeText(this, "Chọn UnityFS gốc và thư mục xuất asset trước.", ToastLength.Long)!.Show();
+            return;
+        }
+        await RunBusyAsync(async token =>
+        {
+            string work = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "unityfs_build");
+            string sourceDir = Path.Combine(work, "source");
+            string output = Path.Combine(work, "extracted");
+            Directory.CreateDirectory(sourceDir);
+            string sourceName = Path.GetFileName(buildBundleUri!.LastPathSegment ?? "source.bundle");
+            string source = await CopyPickedUriToLocalAsync(buildBundleUri!, Path.Combine(sourceDir, sourceName), token);
+            if (Directory.Exists(output)) Directory.Delete(output, true);
+            Directory.CreateDirectory(output);
+            WriteStatus("Đang đọc UnityFS và trích các SerializedFile bên trong…");
+            var result = await Task.Run(() => UnityFsBundleBuildService.ExtractSerializedFiles(source, output), token);
+            await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
+                new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất .assets {p.done}: {p.name}")), token);
+            WriteStatus($"Đã trích {result.SerializedFiles} SerializedFile ({FormatBytes(result.Bytes)}). Chỉnh sửa file trong thư mục xuất, rồi chọn đúng .assets ở mục BUILD.");
+        });
+    }
+
+    private async Task BuildAssetBundleAsync()
+    {
+        if (buildBundleUri == null || buildSerializedUri == null || assetOutputUri == null)
+        {
+            Toast.MakeText(this, "Cần chọn UnityFS gốc, SerializedFile đã sửa và thư mục đầu ra.", ToastLength.Long)!.Show();
+            return;
+        }
+        await RunBusyAsync(async token =>
+        {
+            string work = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath, "unityfs_build");
+            string sourceDir = Path.Combine(work, "build_source");
+            string replacementDir = Path.Combine(work, "replacement");
+            string output = Path.Combine(work, "built");
+            Directory.CreateDirectory(sourceDir);
+            Directory.CreateDirectory(replacementDir);
+            string bundleName = Path.GetFileName(buildBundleUri!.LastPathSegment ?? "source.bundle");
+            string replacementName = Path.GetFileName(buildSerializedUri!.LastPathSegment ?? "replacement.assets");
+            string source = await CopyPickedUriToLocalAsync(buildBundleUri!, Path.Combine(sourceDir, bundleName), token);
+            string replacement = await CopyPickedUriToLocalAsync(buildSerializedUri!, Path.Combine(replacementDir, replacementName), token);
+            if (Directory.Exists(output)) Directory.Delete(output, true);
+            Directory.CreateDirectory(output);
+            WriteStatus("Đang thay SerializedFile vào UnityFS, dựng lại block/directory và xác minh bundle sau build…");
+            string built = await Task.Run(
+                () => UnityFsBundleBuildService.BuildFromSerializedFile(source, replacement, output), token);
+            await SafTree.CopyLocalToTreeAsync(this, output, assetOutputUri!,
+                new Progress<(int done, string name)>(p => WriteStatus($"Đang xuất bundle đã build {p.done}: {p.name}")), token);
+            WriteStatus("BUILD THÀNH CÔNG: " + Path.GetFileName(built) +
+                ". Đã mở lại UnityFS, kiểm tra đủ entry/tên/kích thước và so sánh SerializedFile đã thay thế từng byte. File gốc không bị ghi đè.");
         });
     }
 
