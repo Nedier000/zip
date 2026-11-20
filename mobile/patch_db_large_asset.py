@@ -154,6 +154,54 @@ if "fullSize64 > (ulong)long.MaxValue" not in source or "fullSize > (ulong)long.
 if "compressedSize > 256 * 1024 * 1024" not in source:
     raise SystemExit("Per-chunk allocation safety cap is missing")
 
+
+# Modern QTS VFS signature shares the first UInt32 with the legacy index magic.
+# Dispatch QTS files before the legacy reader uses BaseOffset=0x1A630.
+old_root = '''        CurrentInputRoot.Value = Path.GetFullPath(inputDirectory);
+        try { return await ExtractAsync(inputDirectory, outputDirectory, progress, cancellationToken); }
+        finally { CurrentInputRoot.Value = null; }'''
+new_root = '''        CurrentInputRoot.Value = Path.GetFullPath(inputDirectory);
+        try
+        {
+            if (QtsVfsDbExtractor.ContainsQtsVfsFile(inputDirectory))
+                return await QtsVfsDbExtractor.ExtractAsync(inputDirectory, outputDirectory, progress, cancellationToken);
+            return await ExtractAsync(inputDirectory, outputDirectory, progress, cancellationToken);
+        }
+        finally { CurrentInputRoot.Value = null; }'''
+if old_root in source:
+    source = source.replace(old_root, new_root, 1)
+elif new_root not in source:
+    raise SystemExit("Could not uniquely locate ExtractFromRootAsync dispatch point")
+
+old_index_probe = '''    private static bool IsIndexFile(string path)
+    {
+        try { using var fs = File.OpenRead(path); using var br = new BinaryReader(fs); return fs.Length >= 4 && br.ReadUInt32() == 0x02000001; }
+        catch { return false; }
+    }'''
+new_index_probe = '''    private static bool IsIndexFile(string path)
+    {
+        try
+        {
+            using var fs = File.OpenRead(path);
+            if (fs.Length < 4) return false;
+            if (fs.Length >= 8)
+            {
+                Span<byte> signature = stackalloc byte[8];
+                fs.ReadExactly(signature);
+                if (signature.SequenceEqual(new byte[] { 0x01, 0x00, 0x00, 0x02, 0x01, 0x02, 0x03, 0x04 }))
+                    return false;
+                fs.Position = 0;
+            }
+            using var br = new BinaryReader(fs, Encoding.UTF8, leaveOpen: true);
+            return br.ReadUInt32() == 0x02000001;
+        }
+        catch { return false; }
+    }'''
+if old_index_probe in source:
+    source = source.replace(old_index_probe, new_index_probe, 1)
+elif new_index_probe not in source:
+    raise SystemExit("Could not uniquely locate IsIndexFile probe")
+
 path.write_text(source, encoding="utf-8")
 print("Removed arbitrary 8-GiB total-asset cap; retained 64-bit file-offset validation.")
 print("Reduced Zstd peak memory by eliminating the unused duplicate output buffer.")
