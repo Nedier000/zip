@@ -369,8 +369,14 @@ public static class StudioMobileExportService
         int skipped = 0;
         var errors = new List<string>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var selectedNodes = sourceRoots.Where(x => x != null).Distinct().ToArray();
+        var selectedSet = new HashSet<StudioSceneNode>(selectedNodes);
+        var descendants = new HashSet<StudioSceneNode>();
+        foreach (var selectedNode in selectedNodes)
+            CollectDescendants(selectedNode, descendants);
+        var exportRoots = selectedNodes.Where(x => !descendants.Contains(x)).ToArray();
 
-        foreach (var root in sourceRoots)
+        foreach (var root in exportRoots)
         {
             cancellationToken.ThrowIfCancellationRequested();
             considered++;
@@ -406,6 +412,15 @@ public static class StudioMobileExportService
         }
 
         return new StudioBulkExportResult(considered, exported, skipped, errors);
+    }
+
+    private static void CollectDescendants(StudioSceneNode node, HashSet<StudioSceneNode> descendants)
+    {
+        foreach (var child in node.Children ?? new List<StudioSceneNode>())
+        {
+            if (!descendants.Add(child)) continue;
+            CollectDescendants(child, descendants);
+        }
     }
 
     private static string SafeSegment(string value)
