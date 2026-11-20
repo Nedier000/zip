@@ -78,6 +78,16 @@ public sealed class StudioMobileSettings
         MiHoYoBinData.Encrypted = encrypted;
         MiHoYoBinData.Key = key;
         AssetsHelper.Minimal = minimalAssetMap;
+        try
+        {
+            var keys = UnityCNManager.GetEntries();
+            if (selectedUnityCNKey >= 0 && selectedUnityCNKey < keys.Length)
+                UnityCN.SetKey(keys[selectedUnityCNKey]);
+        }
+        catch
+        {
+            // Missing key catalog must not prevent ordinary Unity files from loading.
+        }
     }
 
     public static string SettingsPath
