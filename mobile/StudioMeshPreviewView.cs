@@ -23,7 +23,7 @@ public sealed class StudioMeshPreviewView : GLSurfaceView
         SetEGLContextClientVersion(2);
         renderer = new MeshRenderer(mesh);
         SetRenderer(renderer);
-        RenderMode = Rendermode.WhenDirty;
+        SetRenderMode(GLSurfaceView.RenderModeWhenDirty);
     }
 
     public override bool OnTouchEvent(MotionEvent? e)
