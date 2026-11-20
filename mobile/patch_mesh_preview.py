@@ -41,7 +41,30 @@ new = """            if (entry.Instance is AssetStudio.AudioClip)
             }
             else if (entry.Instance is AssetStudio.Shader shader)
             {
-                AddTextPreview(layout, shader.Convert() ?? "Serialized Shader không giải mã được.");
+                // Shader.Convert uses the desktop D3DCompiler/Vortice path on
+                // Windows. Android must never invoke that native dependency.
+                string shaderText = string.Empty;
+                byte[] shaderSource = shader.m_Script ?? Array.Empty<byte>();
+                if (shaderSource.Length > 0)
+                {
+                    try
+                    {
+                        shaderText = new global::System.Text.UTF8Encoding(false, true).GetString(shaderSource);
+                        if (shaderText.IndexOf('\\0') >= 0) shaderText = string.Empty;
+                    }
+                    catch (global::System.Text.DecoderFallbackException)
+                    {
+                        shaderText = string.Empty;
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(shaderText))
+                {
+                    try { shaderText = shader.Dump() ?? string.Empty; }
+                    catch (Exception ex) { shaderText = "Shader dump không khả dụng: " + ex.Message; }
+                }
+                AddTextPreview(layout, string.IsNullOrWhiteSpace(shaderText)
+                    ? "Shader chỉ chứa compiled data; bản Android không gọi D3DCompiler của Windows."
+                    : shaderText);
             }
             else if (entry.Instance is AssetStudio.MonoBehaviour behaviour)
             {
