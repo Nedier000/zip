@@ -16,7 +16,9 @@ export_buttons = cab_button + '''
         AddButton(assetCard, "EXPORT SELECTED ASSETS", "#1D4ED8", "#FFFFFF",
             () => { ShowStudioExportModeDialog(true); return Task.CompletedTask; });
         AddButton(assetCard, "EXPORT SPLIT SCENE MODELS (GLB)", "#1D4ED8", "#FFFFFF",
-            async () => await ExportSceneModelsAsync());'''
+            async () => await ExportSceneModelsAsync());
+        AddButton(assetCard, "EXPORT SELECTED MODELS (SPLIT / MERGE)", "#1D4ED8", "#FFFFFF",
+            () => { ShowSelectedModelExportDialog(); return Task.CompletedTask; });'''
 if "ShowCabMapBuilder();" not in s:
     if s.count(asset_map_button) != 1:
         raise SystemExit("Could not locate AssetMap builder button")
