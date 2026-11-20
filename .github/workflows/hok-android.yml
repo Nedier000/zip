@@ -179,6 +179,7 @@ jobs:
           git -C thirdparty/sse2neon checkout 2272251cc3ad9cba8b8c47c4065811cfb396b802
           python3 scripts/patch_studio.py thirdparty/Studio-HoK
           python3 mobile/patch_unitycn_android.py
+          python3 mobile/patch_ai_index.py
           python3 scripts/prepare_ooz.py thirdparty/ooz native/ooz
           cp thirdparty/sse2neon/sse2neon.h native/ooz/sse2neon.h
 
