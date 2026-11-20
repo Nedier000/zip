@@ -13,7 +13,7 @@ namespace HoKTool.Android;
 /// </summary>
 public static class StudioModelExportService
 {
-    public static string ExportGameObject(GameObject gameObject, string outputFolder, StudioMobileSettings settings)
+    public static string ExportGameObject(GameObject gameObject, string outputFolder, StudioMobileSettings settings, AnimationClip[]? selectedAnimations = null)
     {
         if (gameObject == null) throw new ArgumentNullException(nameof(gameObject));
         if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentException("Output folder is empty.", nameof(outputFolder));
@@ -21,11 +21,11 @@ public static class StudioModelExportService
         settings ??= new StudioMobileSettings();
         settings.ApplyCoreSettings();
 
-        var converted = new ModelConverter(gameObject, CreateOptions(settings));
+        var converted = new ModelConverter(gameObject, CreateOptions(settings), selectedAnimations);
         return WriteImportedModel(converted, gameObject.Name, outputFolder, settings);
     }
 
-    public static string ExportAnimator(Animator animator, string outputFolder, StudioMobileSettings settings)
+    public static string ExportAnimator(Animator animator, string outputFolder, StudioMobileSettings settings, AnimationClip[]? selectedAnimations = null)
     {
         if (animator == null) throw new ArgumentNullException(nameof(animator));
         if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentException("Output folder is empty.", nameof(outputFolder));
@@ -35,8 +35,32 @@ public static class StudioModelExportService
 
         // Use the original Studio-HoK Animator overload so Avatar, transform
         // hierarchy and controller clip binding are retained by ModelConverter.
-        var converted = new ModelConverter(animator, CreateOptions(settings));
+        var converted = new ModelConverter(animator, CreateOptions(settings), selectedAnimations);
         string name = animator.m_GameObject.TryGet(out var gameObject) ? gameObject.Name : animator.Name;
+        return WriteImportedModel(converted, name, outputFolder, settings);
+    }
+
+    public static string ExportMergedGameObjects(
+        IReadOnlyList<GameObject> gameObjects,
+        string outputFolder,
+        StudioMobileSettings settings,
+        AnimationClip[]? selectedAnimations = null,
+        string? rootName = null)
+    {
+        if (gameObjects == null || gameObjects.Count == 0)
+            throw new ArgumentException("No GameObject selected.", nameof(gameObjects));
+        if (string.IsNullOrWhiteSpace(outputFolder))
+            throw new ArgumentException("Output folder is empty.", nameof(outputFolder));
+        Directory.CreateDirectory(outputFolder);
+        settings ??= new StudioMobileSettings();
+        settings.ApplyCoreSettings();
+
+        var unique = gameObjects.Where(x => x != null)
+            .Distinct()
+            .ToList();
+        if (unique.Count == 0) throw new InvalidDataException("No valid GameObject selected.");
+        string name = string.IsNullOrWhiteSpace(rootName) ? unique[0].Name + " (merge)" : rootName;
+        var converted = new ModelConverter(name, unique, CreateOptions(settings), selectedAnimations);
         return WriteImportedModel(converted, name, outputFolder, settings);
     }
 
