@@ -164,6 +164,11 @@ public static class StudioMobilePanels
         gameSpinner.SetSelection(Math.Clamp(settings.selectedGame, 0, Math.Max(0, gameNames.Length - 1)));
         content.AddView(gameSpinner, MatchWrap());
 
+        var typeFlagsButton = new Button(activity) { Text = "TYPE PARSE / EXPORT FLAGS", TextSize = 12 };
+        typeFlagsButton.SetAllCaps(false);
+        typeFlagsButton.Click += (_, _) => ShowTypeFlagsDialog(activity, settings, saved);
+        content.AddView(typeFlagsButton, MatchWrap());
+
         AddLabel(content, "Unity version override");
         var unityVersion = new EditText(activity) { Text = settings.specifyUnityVersion, Hint = "Ví dụ: 2021.3.XXf1" };
         content.AddView(unityVersion, MatchWrap());
@@ -221,6 +226,64 @@ public static class StudioMobilePanels
             })
             .Show();
     }
+
+    private static void ShowTypeFlagsDialog(Activity activity, StudioMobileSettings settings, Action? saved)
+    {
+        Dictionary<AssetStudio.ClassIDType, (bool, bool)> map;
+        try
+        {
+            map = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<AssetStudio.ClassIDType, (bool, bool)>>(settings.types)
+                ?? new Dictionary<AssetStudio.ClassIDType, (bool, bool)>();
+        }
+        catch
+        {
+            map = new Dictionary<AssetStudio.ClassIDType, (bool, bool)>();
+        }
+
+        var scroll = new ScrollView(activity);
+        var content = new LinearLayout(activity) { Orientation = Orientation.Vertical };
+        content.SetPadding(12, 8, 12, 8);
+        scroll.AddView(content);
+
+        var editors = new Dictionary<AssetStudio.ClassIDType, (CheckBox Parse, CheckBox Export)>();
+        foreach (var item in map.OrderBy(x => x.Key.ToString(), StringComparer.Ordinal))
+        {
+            var row = new LinearLayout(activity) { Orientation = Orientation.Horizontal };
+            var label = new TextView(activity)
+            {
+                Text = item.Key.ToString(),
+                TextSize = 12,
+                Gravity = GravityFlags.CenterVertical
+            };
+            row.AddView(label, new LayoutParams(0, Dp(activity, 42), 1));
+
+            var parse = new CheckBox(activity) { Text = "Parse", TextSize = 11, Checked = item.Value.Item1 };
+            var export = new CheckBox(activity) { Text = "Export", TextSize = 11, Checked = item.Value.Item2 };
+            row.AddView(parse, new LayoutParams(Dp(activity, 76), Dp(activity, 42)));
+            row.AddView(export, new LayoutParams(Dp(activity, 82), Dp(activity, 42)));
+            content.AddView(row);
+            editors[item.Key] = (parse, export);
+        }
+
+        new AlertDialog.Builder(activity)
+            .SetTitle("TYPE FLAGS · PARSE / EXPORT")
+            .SetView(scroll)
+            .SetNegativeButton("HỦY", (_, _) => { })
+            .SetPositiveButton("LƯU", (_, _) =>
+            {
+                foreach (var item in editors)
+                    map[item.Key] = (item.Value.Parse.Checked, item.Value.Export.Checked);
+                settings.types = Newtonsoft.Json.JsonConvert.SerializeObject(map);
+                settings.ApplyCoreSettings();
+                settings.Save();
+                saved?.Invoke();
+                Toast.MakeText(activity, "Đã lưu Type Parse/Export flags.", ToastLength.Short)!.Show();
+            })
+            .Show();
+    }
+
+    private static int Dp(Activity activity, int value) =>
+        (int)(value * activity.Resources!.DisplayMetrics!.Density + 0.5f);
 
     private static void ShowClassList(Activity activity, StudioClassGroup group)
     {
