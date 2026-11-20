@@ -1,3 +1,4 @@
+using GameManager = AssetStudio.GameManager;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -307,7 +308,7 @@ public sealed class StudioWorkspaceService : IDisposable
     {
         char[] invalid = Path.GetInvalidFileNameChars();
         var chars = value.Select(ch => invalid.Contains(ch) || ch == '/' || ch == '\\' ? '_' : ch).ToArray();
-        string result = new(chars).Trim();
+        string result = new string(chars).Trim();
         return string.IsNullOrEmpty(result) ? "unnamed" : result;
     }
 
