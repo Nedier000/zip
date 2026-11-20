@@ -2,15 +2,6 @@ name: Build HoK Tool Android (full port)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - 'mobile/**'
-      - 'scripts/**'
-      - 'THIRD_PARTY_LICENSES.md'
-      - 'STUDIO_HOK_LICENSE.txt'
-      - 'android_port_payload.b64.*'
-      - '.github/workflows/hok-android.yml'
 
 permissions:
   contents: read
