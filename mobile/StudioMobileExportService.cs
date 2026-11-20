@@ -191,7 +191,11 @@ public static class StudioMobileExportService
             {
                 byte[] data = audio.m_AudioData?.GetData() ?? Array.Empty<byte>();
                 if (data.Length == 0) return string.Empty;
-                return WriteUnique(outputFolder, assetName, DetectAudioExtension(data), data);
+                string extension;
+                try { extension = new AudioClipConverter(audio).GetExtensionName(); }
+                catch { extension = DetectAudioExtension(data); }
+                if (string.IsNullOrWhiteSpace(extension) || extension[0] != '.') extension = DetectAudioExtension(data);
+                return WriteUnique(outputFolder, assetName, extension, data);
             }
 
             var entry = new AssetEntry
@@ -243,7 +247,7 @@ public static class StudioMobileExportService
             if (data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x4F, 0x67, 0x67, 0x53 })) return ".ogg";
             if (data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x52, 0x49, 0x46, 0x46 })) return ".wav";
             if (data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x46, 0x53, 0x42, 0x35 })) return ".fsb";
-            if (data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x49, 0x44, 0x33, 0x00 })) return ".mp3";
+            if (data[0] == 0x49 && data[1] == 0x44 && data[2] == 0x33) return ".mp3";
             if (data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x00, 0x00, 0x00, 0x18 }) &&
                 data.AsSpan(4, 4).SequenceEqual(new byte[] { 0x66, 0x74, 0x79, 0x70 })) return ".mp4";
         }
