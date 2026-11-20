@@ -202,7 +202,8 @@ public sealed class StudioGlbExporter
         int? skinIndex = null;
         if (exportSkins && source.BoneList?.Count > 0)
         {
-            int createdSkin = AddSkin(source, vertices, attributes);\n            if (createdSkin >= 0) skinIndex = createdSkin;
+            int createdSkin = AddSkin(source, vertices, attributes);
+            if (createdSkin >= 0) skinIndex = createdSkin;
         }
 
         var primitives = new List<object>();
