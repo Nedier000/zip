@@ -64,9 +64,72 @@ methods = r"""
         });
     }
 
+    private void ShowSelectedModelExportDialog()
+    {
+        var selected = GetSelectedAssets();
+        if (selected.Count == 0)
+        {
+            Toast.MakeText(this, "Chọn GameObject / Animator và có thể chọn thêm AnimationClip.", ToastLength.Long)!.Show();
+            return;
+        }
+        string[] actions =
+        {
+            "Export split (mỗi GameObject một GLB)",
+            "Export merge (gộp vào một GLB)",
+            "Export split + AnimationClip đã chọn",
+            "Export merge + AnimationClip đã chọn"
+        };
+        new AlertDialog.Builder(this)
+            .SetTitle("SELECTED MODEL EXPORT")
+            .SetItems(actions, async (_, args) =>
+            {
+                bool merge = args.Which is 1 or 3;
+                bool forceSelectedAnimations = args.Which is 2 or 3;
+                var animationClips = selected.Where(x => x.Instance is AssetStudio.AnimationClip).ToList();
+                if (forceSelectedAnimations && animationClips.Count == 0)
+                {
+                    Toast.MakeText(this, "Chưa chọn AnimationClip; hãy chọn thêm AnimationClip trong Asset List.", ToastLength.Long)!.Show();
+                    return;
+                }
+                await ExportSelectedModelsAsync(selected, merge);
+            })
+            .SetNegativeButton("HỦY", (_, _) => { })
+            .Show();
+    }
+
+    private async Task ExportSelectedModelsAsync(IReadOnlyList<AssetEntry> selected, bool merge)
+    {
+        if (assetOutputUri == null)
+        {
+            Toast.MakeText(this, "Chọn thư mục xuất asset trước.", ToastLength.Long)!.Show();
+            return;
+        }
+        await RunBusyAsync(async token =>
+        {
+            string output = Path.Combine(GetExternalFilesDir(null)!.AbsolutePath,
+                merge ? "studio_models_merge" : "studio_models_split");
+            if (Directory.Exists(output)) Directory.Delete(output, true);
+            Directory.CreateDirectory(output);
+            mobileSettings.ApplyCoreSettings();
+            var progress = new Progress<string>(message => WriteStatus(message));
+            var result = await Task.Run(
+                () => assetBrowser.ExportSelectedModels(selected, output, mobileSettings, merge, token, progress), token);
+            if (result.Exported > 0)
+                await SafTree.CopyLocalToTreeAsync(
+                    this, output, assetOutputUri!,
+                    new Progress<(int done, string name)>(p => WriteStatus($"Đang chép model {p.done}: {p.name}")),
+                    token);
+            WriteStatus($"Selected Models: {result.Exported:N0} GLB / {result.Skipped:N0} bỏ qua / {result.Errors.Count:N0} lỗi.");
+            if (result.Errors.Count > 0)
+                WriteStatus(string.Join("\n", result.Errors.Take(16)));
+            Toast.MakeText(this, $"Đã xuất {result.Exported:N0} GLB.", ToastLength.Long)!.Show();
+        });
+    }
+
     private async Task ExportSceneModelsAsync()
     {
-        if (sceneRoots == null || sceneRoots.Count == 0)
+        var rootsToExport = selectedSceneRoots.Count > 0 ? selectedSceneRoots : sceneRoots;
+        if (rootsToExport == null || rootsToExport.Count == 0)
         {
             Toast.MakeText(this, "Chưa có Scene Hierarchy. Hãy quét dữ liệu Unity trước.", ToastLength.Long)!.Show();
             return;
@@ -84,7 +147,7 @@ methods = r"""
             mobileSettings.ApplyCoreSettings();
             var progress = new Progress<string>(message => WriteStatus(message));
             var result = await Task.Run(
-                () => assetBrowser.ExportSceneModels(output, mobileSettings, token, progress), token);
+                () => assetBrowser.ExportSceneModels(rootsToExport, output, mobileSettings, token, progress), token);
             if (result.Exported > 0)
                 await SafTree.CopyLocalToTreeAsync(
                     this, output, assetOutputUri!,
