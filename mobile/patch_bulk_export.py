@@ -7,7 +7,33 @@ s = p.read_text(encoding="utf-8")
 
 anchor = "    private async Task ScanAssetsAsync()"
 methods = r"""
-    private async Task ExportAllStudioAssetsAsync()
+    private void ShowStudioExportModeDialog(bool selected)
+    {
+        if (selected && GetSelectedAssets().Count == 0)
+        {
+            Toast.MakeText(this, "Chọn ít nhất một asset trước.", ToastLength.Long)!.Show();
+            return;
+        }
+        string[] modes =
+        {
+            "Convert (GLB / PNG / audio raw / shader source…)",
+            "Raw (.dat)",
+            "Dump (.txt)",
+            "JSON (.json)"
+        };
+        new AlertDialog.Builder(this)
+            .SetTitle(selected ? "EXPORT SELECTED ASSETS" : "EXPORT ALL EXPORTABLE ASSETS")
+            .SetItems(modes, (_, args) =>
+            {
+                var mode = (StudioMobileExportMode)args.Which;
+                if (selected) _ = ExportSelectedStudioAssetsAsync(mode);
+                else _ = ExportAllStudioAssetsAsync(mode);
+            })
+            .SetNegativeButton("HỦY", (_, _) => { })
+            .Show();
+    }
+
+    private async Task ExportAllStudioAssetsAsync(StudioMobileExportMode mode)
     {
         if (assetOutputUri == null)
         {
@@ -23,7 +49,7 @@ methods = r"""
             mobileSettings.ApplyCoreSettings();
             var progress = new Progress<string>(message => WriteStatus(message));
             var result = await Task.Run(
-                () => assetBrowser.ExportAllAssets(output, mobileSettings, token, progress), token);
+                () => assetBrowser.ExportAllAssets(output, mobileSettings, token, progress, mode), token);
 
             if (result.Exported > 0)
                 await SafTree.CopyLocalToTreeAsync(
@@ -71,7 +97,7 @@ methods = r"""
         });
     }
 
-    private async Task ExportSelectedStudioAssetsAsync()
+    private async Task ExportSelectedStudioAssetsAsync(StudioMobileExportMode mode)
     {
         var selected = GetSelectedAssets();
         if (selected.Count == 0)
@@ -93,7 +119,7 @@ methods = r"""
             mobileSettings.ApplyCoreSettings();
             var progress = new Progress<string>(message => WriteStatus(message));
             var result = await Task.Run(
-                () => assetBrowser.ExportSelectedAssets(selected, output, mobileSettings, token, progress), token);
+                () => assetBrowser.ExportSelectedAssets(selected, output, mobileSettings, token, progress, mode), token);
 
             if (result.Exported > 0)
                 await SafTree.CopyLocalToTreeAsync(
