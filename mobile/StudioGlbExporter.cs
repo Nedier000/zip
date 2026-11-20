@@ -35,17 +35,20 @@ public sealed class StudioGlbExporter
     private readonly Dictionary<string, List<GlbMorphTarget>> morphTargetsByPath = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> meshNodeByPath = new(StringComparer.Ordinal);
     private readonly HashSet<string> extensionsUsed = new(StringComparer.Ordinal);
+    private float exportScale = 1f;
 
     public StudioGlbExporter()
     {
         writer = new BinaryWriter(binary, Encoding.UTF8, leaveOpen: true);
     }
 
-    public void Export(string outputPath, IImported imported, bool exportSkins = true, bool exportAnimations = true, bool exportMaterials = true)
+    public void Export(string outputPath, IImported imported, bool exportSkins = true, bool exportAnimations = true, bool exportMaterials = true, bool exportBlendShapes = true, float scaleFactor = 1f)
     {
         if (string.IsNullOrWhiteSpace(outputPath)) throw new ArgumentException("Output path is empty.", nameof(outputPath));
         if (imported == null || imported.RootFrame == null) throw new ArgumentException("Imported scene is empty.", nameof(imported));
         if (imported.MeshList == null || imported.MeshList.Count == 0) throw new InvalidDataException("The selected GameObject has no mesh.");
+
+        exportScale = float.IsFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1f;
 
         foreach (var texture in imported.TextureList ?? new List<ImportedTexture>())
             if (!string.IsNullOrWhiteSpace(texture.Name) && texture.Data?.Length > 0)
@@ -115,7 +118,7 @@ public sealed class StudioGlbExporter
         var node = new Dictionary<string, object?>
         {
             ["name"] = SafeName(frame.Name),
-            ["translation"] = new[] { frame.LocalPosition.X, frame.LocalPosition.Y, frame.LocalPosition.Z },
+            ["translation"] = new[] { frame.LocalPosition.X * exportScale, frame.LocalPosition.Y * exportScale, frame.LocalPosition.Z * exportScale },
             ["rotation"] = new[] { frame.LocalRotation.X, frame.LocalRotation.Y, frame.LocalRotation.Z, frame.LocalRotation.W },
             ["scale"] = new[] { frame.LocalScale.X, frame.LocalScale.Y, frame.LocalScale.Z }
         };
@@ -140,9 +143,9 @@ public sealed class StudioGlbExporter
         for (int i = 0; i < vertexCount; i++)
         {
             var v = vertices[i];
-            positions[i * 3] = v.Vertex.X;
-            positions[i * 3 + 1] = v.Vertex.Y;
-            positions[i * 3 + 2] = v.Vertex.Z;
+            positions[i * 3] = v.Vertex.X * exportScale;
+            positions[i * 3 + 1] = v.Vertex.Y * exportScale;
+            positions[i * 3 + 2] = v.Vertex.Z * exportScale;
             if (normals != null)
             {
                 normals[i * 3] = v.Normal.X;
@@ -195,7 +198,9 @@ public sealed class StudioGlbExporter
             }
         }
 
-        var morphTargets = BuildMorphTargets(imported, source, vertices);
+        var morphTargets = exportBlendShapes
+            ? BuildMorphTargets(imported, source, vertices)
+            : new List<GlbMorphTargetData>();
         if (morphTargets.Count > 0)
             morphTargetsByPath[source.Path] = morphTargets.Select(x => new GlbMorphTarget(x.Name, x.FrameWeight)).ToList();
 
@@ -288,7 +293,7 @@ public sealed class StudioGlbExporter
             if (nodeIndex < 0) continue;
             boneRemap[i] = checked((ushort)jointNodes.Count);
             jointNodes.Add(nodeIndex);
-            for (int j = 0; j < 16; j++) inverseBind.Add(bone.Matrix[j]);
+            for (int j = 0; j < 16; j++) inverseBind.Add(j is 12 or 13 or 14 ? bone.Matrix[j] * exportScale : bone.Matrix[j]);
         }
         if (jointNodes.Count == 0) return -1;
 
@@ -335,7 +340,10 @@ public sealed class StudioGlbExporter
 
     private int GetMaterialIndex(IImported imported, string name, ImportedMesh sourceMesh)
     {
-        if (materialIndices.TryGetValue(name, out int known)) return known;
+        string cacheKey = name + "|" + string.Join(",", Enumerable.Range(0,
+            Math.Min(sourceMesh.hasUV?.Length ?? 0, sourceMesh.uvType?.Length ?? 0))
+            .Select(i => sourceMesh.hasUV![i] ? sourceMesh.uvType![i].ToString(System.Globalization.CultureInfo.InvariantCulture) : "-1"));
+        if (materialIndices.TryGetValue(cacheKey, out int known)) return known;
         var material = imported.MaterialList?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.Ordinal));
         if (material == null) return -1;
 
@@ -450,7 +458,7 @@ public sealed class StudioGlbExporter
         if (material.Transparency > 0) materialJson["alphaMode"] = "BLEND";
         int index = materials.Count;
         materials.Add(materialJson);
-        materialIndices[name] = index;
+        materialIndices[cacheKey] = index;
         return index;
     }
 
