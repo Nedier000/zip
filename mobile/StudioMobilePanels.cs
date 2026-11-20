@@ -16,7 +16,10 @@ namespace HoKTool.Android;
 /// </summary>
 public static class StudioMobilePanels
 {
-    public static void ShowSceneHierarchy(Activity activity, IReadOnlyList<StudioSceneNode> roots)
+    public static void ShowSceneHierarchy(
+        Activity activity,
+        IReadOnlyList<StudioSceneNode> roots,
+        Action<IReadOnlyList<StudioSceneNode>>? selectionChanged = null)
     {
         if (roots == null || roots.Count == 0)
         {
@@ -26,30 +29,21 @@ public static class StudioMobilePanels
 
         var rows = new List<StudioSceneNodeRow>();
         foreach (var root in roots) Flatten(root, 0, rows, 0, 100_000);
-
-        var list = new ListView(activity);
+        var list = new ListView(activity)
+        {
+            ChoiceMode = ChoiceMode.Multiple,
+            DividerHeight = 1
+        };
         list.Adapter = new ArrayAdapter<string>(
             activity,
-            Android.Resource.Layout.SimpleListItem1,
+            Android.Resource.Layout.SimpleListItemMultipleChoice,
             rows.Select(row => row.Display).ToArray());
-        list.DividerHeight = 1;
-
-        list.ItemClick += (_, args) =>
-        {
-            if (args.Position < 0 || args.Position >= rows.Count) return;
-            var row = rows[args.Position];
-            new AlertDialog.Builder(activity)
-                .SetTitle(row.Node.Name)
-                .SetMessage($"PathID: {row.Node.PathId}\nSource: {row.Node.Source}\nChildren: {row.Node.Children.Count}")
-                .SetPositiveButton("ĐÓNG", (_, _) => { })
-                .Show();
-        };
 
         var wrapper = new LinearLayout(activity) { Orientation = Orientation.Vertical };
         wrapper.SetPadding(8, 8, 8, 8);
         wrapper.AddView(new TextView(activity)
         {
-            Text = $"Scene Hierarchy · {rows.Count:N0} GameObject",
+            Text = $"Scene Hierarchy · {rows.Count:N0} GameObject. Đánh dấu các node cần xuất GLB.",
             TextSize = 13
         });
         wrapper.AddView(list, new LinearLayout.LayoutParams(-1, activity.Resources!.DisplayMetrics!.HeightPixels * 2 / 3));
@@ -57,7 +51,15 @@ public static class StudioMobilePanels
         new AlertDialog.Builder(activity)
             .SetTitle("SCENE HIERARCHY")
             .SetView(wrapper)
-            .SetPositiveButton("ĐÓNG", (_, _) => { })
+            .SetNegativeButton("ĐÓNG", (_, _) => { })
+            .SetPositiveButton("DÙNG NODE ĐÃ CHỌN", (_, _) =>
+            {
+                var selected = new List<StudioSceneNode>();
+                for (int i = 0; i < rows.Count; i++)
+                    if (list.IsItemChecked(i)) selected.Add(rows[i].Node);
+                selectionChanged?.Invoke(selected);
+                Toast.MakeText(activity, $"Đã chọn {selected.Count:N0} node.", ToastLength.Short)!.Show();
+            })
             .Show();
     }
 
