@@ -152,6 +152,69 @@ public static class StudioMobileExportService
         return new StudioBulkExportResult(considered, exported, skipped, errors);
     }
 
+    public static StudioBulkExportResult ExportSceneRoots(
+        IEnumerable<StudioSceneNode> sourceRoots,
+        string outputFolder,
+        StudioMobileSettings settings,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progress = null)
+    {
+        if (sourceRoots == null) throw new ArgumentNullException(nameof(sourceRoots));
+        if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentException("Output folder is empty.", nameof(outputFolder));
+        settings ??= new StudioMobileSettings();
+        Directory.CreateDirectory(outputFolder);
+
+        int considered = 0;
+        int exported = 0;
+        int skipped = 0;
+        var errors = new List<string>();
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var root in sourceRoots)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            considered++;
+            if (root?.Instance == null || !HasModelSafe(root.Instance))
+            {
+                skipped++;
+                continue;
+            }
+
+            string name = SafeSegment(string.IsNullOrWhiteSpace(root.Name) ? $"Scene_{root.PathId}" : root.Name);
+            if (name.Length == 0) name = $"Scene_{root.PathId}";
+            if (!settings.allowDuplicates && !names.Add(name))
+            {
+                skipped++;
+                continue;
+            }
+            if (settings.allowDuplicates && !names.Add(name))
+                name += "__" + root.PathId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            try
+            {
+                string folder = Path.Combine(outputFolder, name);
+                Directory.CreateDirectory(folder);
+                string path = StudioModelExportService.ExportGameObject(root.Instance, folder, settings);
+                exported++;
+                progress?.Report($"Scene model {exported:N0}: {Path.GetFileName(path)}");
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{root.Name} [{root.PathId}]: {ex.Message}");
+                progress?.Report($"Scene model error: {root.Name} · {ex.Message}");
+            }
+        }
+
+        return new StudioBulkExportResult(considered, exported, skipped, errors);
+    }
+
+    private static string SafeSegment(string value)
+    {
+        char[] invalid = Path.GetInvalidFileNameChars();
+        var chars = value.Select(ch => invalid.Contains(ch) || ch == '/' || ch == '\\' || char.IsControl(ch) ? '_' : ch).ToArray();
+        return new string(chars).Trim().Trim('.');
+    }
+
     private static GameObject? ResolveModelObject(AssetStudio.Object item)
     {
         try
