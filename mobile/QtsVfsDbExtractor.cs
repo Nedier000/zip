@@ -124,7 +124,7 @@ public static class QtsVfsDbExtractor
     private static Dictionary<ulong, List<Chunk>> ReadIndex(BinaryReader reader)
     {
         var stream = reader.BaseStream;
-        if (stream.Length < 64) throw new InvalidDataException("QTS VFS header bị cắt cụt.");
+        if (stream.Length < 80) throw new InvalidDataException("QTS VFS header bị cắt cụt.");
         stream.Position = 0;
         byte[] signature = reader.ReadBytes(8);
         if (!signature.SequenceEqual(Magic)) throw new InvalidDataException("Sai chữ ký QTS VFS.");
@@ -268,7 +268,7 @@ public static class QtsVfsDbExtractor
         {
             codec = "Zstd";
             using var zstd = new Decompressor();
-            byte[] z = zstd.Unwrap(packed);
+            byte[] z = zstd.Unwrap(packed).ToArray();
             if (z.Length != result.Length) throw new InvalidDataException($"Zstd decoded {z.Length}, expected {result.Length}.");
             return z;
         }
