@@ -59,6 +59,27 @@ replacement = r'''    private readonly StudioWorkspaceService workspace = new();
     public IReadOnlyList<StudioClassGroup> GetClassGroups() => workspace.GetClassGroups();
     public void ExportClassGroups(string outputFolder) => workspace.ExportClassGroups(outputFolder);
     public void Clear() => workspace.Reset();
+    public StudioBulkExportResult ExportAllAssets(
+        string outputFolder, StudioMobileSettings settings,
+        System.Threading.CancellationToken cancellationToken,
+        IProgress<string>? progress = null)
+        => StudioMobileExportService.ExportRows(
+            workspace.GetAssetRows(includeAllObjects: false), outputFolder,
+            settings, cancellationToken, progress);
+
+    public StudioBulkExportResult ExportSelectedAssets(
+        IEnumerable<AssetEntry> selected, string outputFolder,
+        StudioMobileSettings settings,
+        System.Threading.CancellationToken cancellationToken,
+        IProgress<string>? progress = null)
+    {
+        if (selected == null) throw new ArgumentNullException(nameof(selected));
+        var entries = selected.Where(x => x?.Instance != null).Select(x => x.Instance).ToArray();
+        var rows = workspace.GetAssetRows(includeAllObjects: true)
+            .Where(row => entries.Any(instance => ReferenceEquals(instance, row.Instance)))
+            .ToArray();
+        return StudioMobileExportService.ExportRows(rows, outputFolder, settings, cancellationToken, progress);
+    }
     public string[] GetLoadedFilePaths() => workspace.SerializedFiles
         .Select(file => file.fullName)
         .Where(File.Exists)
