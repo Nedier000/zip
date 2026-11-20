@@ -71,23 +71,25 @@ replacement = r'''    private readonly StudioWorkspaceService workspace = new();
     public StudioBulkExportResult ExportAllAssets(
         string outputFolder, StudioMobileSettings settings,
         System.Threading.CancellationToken cancellationToken,
-        IProgress<string>? progress = null)
+        IProgress<string>? progress = null,
+        StudioMobileExportMode mode = StudioMobileExportMode.Convert)
         => StudioMobileExportService.ExportRows(
-            workspace.GetAssetRows(includeAllObjects: false), outputFolder,
-            settings, cancellationToken, progress);
+            workspace.GetAssetRows(includeAllObjects: false, skipContainer: settings.skipContainer), outputFolder,
+            settings, cancellationToken, progress, mode);
 
     public StudioBulkExportResult ExportSelectedAssets(
         IEnumerable<AssetEntry> selected, string outputFolder,
         StudioMobileSettings settings,
         System.Threading.CancellationToken cancellationToken,
-        IProgress<string>? progress = null)
+        IProgress<string>? progress = null,
+        StudioMobileExportMode mode = StudioMobileExportMode.Convert)
     {
         if (selected == null) throw new ArgumentNullException(nameof(selected));
         var entries = selected.Where(x => x?.Instance != null).Select(x => x.Instance).ToArray();
-        var rows = workspace.GetAssetRows(includeAllObjects: true)
+        var rows = workspace.GetAssetRows(includeAllObjects: true, skipContainer: settings.skipContainer)
             .Where(row => entries.Any(instance => ReferenceEquals(instance, row.Instance)))
             .ToArray();
-        return StudioMobileExportService.ExportRows(rows, outputFolder, settings, cancellationToken, progress);
+        return StudioMobileExportService.ExportRows(rows, outputFolder, settings, cancellationToken, progress, mode);
     }
     public string[] GetLoadedFilePaths() => workspace.SerializedFiles
         .Select(file => file.fullName)
