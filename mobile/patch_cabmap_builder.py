@@ -12,9 +12,9 @@ cab_button = asset_map_button + '''
             () => { ShowCabMapBuilder(); return Task.CompletedTask; });'''
 export_buttons = cab_button + '''
         AddButton(assetCard, "EXPORT ALL EXPORTABLE ASSETS", "#1D4ED8", "#FFFFFF",
-            async () => await ExportAllStudioAssetsAsync());
+            () => { ShowStudioExportModeDialog(false); return Task.CompletedTask; });
         AddButton(assetCard, "EXPORT SELECTED ASSETS", "#1D4ED8", "#FFFFFF",
-            async () => await ExportSelectedStudioAssetsAsync());
+            () => { ShowStudioExportModeDialog(true); return Task.CompletedTask; });
         AddButton(assetCard, "EXPORT SPLIT SCENE MODELS (GLB)", "#1D4ED8", "#FFFFFF",
             async () => await ExportSceneModelsAsync());'''
 if "ShowCabMapBuilder();" not in s:
