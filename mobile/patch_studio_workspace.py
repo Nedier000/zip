@@ -61,6 +61,13 @@ replacement = r'''    private readonly StudioWorkspaceService workspace = new();
     public IReadOnlyList<StudioClassGroup> GetClassGroups() => workspace.GetClassGroups();
     public void ExportClassGroups(string outputFolder) => workspace.ExportClassGroups(outputFolder);
     public void Clear() => workspace.Reset();
+    public StudioBulkExportResult ExportSceneModels(
+        string outputFolder, StudioMobileSettings settings,
+        System.Threading.CancellationToken cancellationToken,
+        IProgress<string>? progress = null)
+        => StudioMobileExportService.ExportSceneRoots(
+            workspace.GetSceneHierarchy(), outputFolder, settings, cancellationToken, progress);
+
     public StudioBulkExportResult ExportAllAssets(
         string outputFolder, StudioMobileSettings settings,
         System.Threading.CancellationToken cancellationToken,
