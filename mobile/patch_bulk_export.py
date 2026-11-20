@@ -91,13 +91,13 @@ methods = r"""
                     Toast.MakeText(this, "Chưa chọn AnimationClip; hãy chọn thêm AnimationClip trong Asset List.", ToastLength.Long)!.Show();
                     return;
                 }
-                await ExportSelectedModelsAsync(selected, merge);
+                await ExportSelectedModelsAsync(selected, merge, forceSelectedAnimations);
             })
             .SetNegativeButton("HỦY", (_, _) => { })
             .Show();
     }
 
-    private async Task ExportSelectedModelsAsync(IReadOnlyList<AssetEntry> selected, bool merge)
+    private async Task ExportSelectedModelsAsync(IReadOnlyList<AssetEntry> selected, bool merge, bool includeSelectedAnimations)
     {
         if (assetOutputUri == null)
         {
@@ -113,7 +113,7 @@ methods = r"""
             mobileSettings.ApplyCoreSettings();
             var progress = new Progress<string>(message => WriteStatus(message));
             var result = await Task.Run(
-                () => assetBrowser.ExportSelectedModels(selected, output, mobileSettings, merge, token, progress), token);
+                () => assetBrowser.ExportSelectedModels(selected, output, mobileSettings, merge, includeSelectedAnimations, token, progress), token);
             if (result.Exported > 0)
                 await SafTree.CopyLocalToTreeAsync(
                     this, output, assetOutputUri!,
