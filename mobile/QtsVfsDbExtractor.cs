@@ -134,12 +134,12 @@ public static class QtsVfsDbExtractor
         if (size < 0 || fullSize < 0)
             throw new InvalidDataException($"QTS VFS header size không hợp lệ: size={size}, fullSize={fullSize}.");
 
-        int[] pairs = new int[20];
+        int[] pairs = new int[16];
         for (int i = 0; i < pairs.Length; i++) pairs[i] = reader.ReadInt32();
         // Layout after magic/size/fullSize:
         // Unknown0, Unknown1, Index, IndexData, Entries1, Entries2, Entries3, Unknown2.
-        int entries2Offset = pairs[14];
-        int entries3Offset = pairs[16];
+        int entries2Offset = pairs[10];
+        int entries3Offset = pairs[12];
         var tables = ReadTables(reader, entries2Offset).Concat(ReadTables(reader, entries3Offset)).ToArray();
         var blockOffsets = new HashSet<int>();
         foreach (var table in tables)
@@ -226,12 +226,15 @@ public static class QtsVfsDbExtractor
         EnsureRange(stream, stream.Position, count * 24L, "QTS VFS table records");
         var tables = new List<Table>(count);
         for (int i = 0; i < count; i++)
-            tables.Add(new Table(reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32())
-            {
-                // unknown fields are read below to preserve record alignment
-            });
-        // No additional fields follow the three offsets because they were
-        // included in each record's 24-byte range; seek past the remaining 12.
+        {
+            int a = reader.ReadInt32();
+            int b = reader.ReadInt32();
+            int c = reader.ReadInt32();
+            _ = reader.ReadInt32();
+            _ = reader.ReadInt32();
+            _ = reader.ReadInt32();
+            tables.Add(new Table(a, b, c));
+        }
         return tables;
     }
 
