@@ -48,8 +48,7 @@ public sealed class StudioAudioPreviewView : LinearLayout
         {
             if (prepared && player != null && !released)
             {
-                int target = (int)((long)seek.Progress * player.Duration / 1000L);
-                player.SeekTo(target);
+                player.SeekTo(seek.Progress);
             }
         };
 
@@ -126,6 +125,7 @@ public sealed class StudioAudioPreviewView : LinearLayout
                 prepared = true;
                 player.IsLooping = loop.Checked;
                 seek.Max = Math.Max(1, player.Duration);
+                seek.Progress = 0;
                 status.Text = "Audio sẵn sàng";
                 UpdatePosition();
             };
