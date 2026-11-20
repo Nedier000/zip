@@ -117,6 +117,7 @@ jobs:
           python3 mobile/patch_model_glb_export.py
           python3 mobile/patch_assetmap_builder.py
           python3 mobile/patch_cabmap_builder.py
+          python3 mobile/patch_bulk_export.py
           grep -n -E 'SỬA TEXTASSET|EditSelectedTextAsset|SaveTextAssetEditAsync' mobile/MainActivity.cs
 
       - name: Set Android API target in app project
