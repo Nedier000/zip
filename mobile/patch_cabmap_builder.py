@@ -10,10 +10,15 @@ asset_map_button = '''        AddButton(assetCard, "BUILD / EXPORT ASSETMAP", "#
 cab_button = asset_map_button + '''
         AddButton(assetCard, "BUILD CABMAP / BUILD BOTH", "#0F766E", "#FFFFFF",
             () => { ShowCabMapBuilder(); return Task.CompletedTask; });'''
+export_buttons = cab_button + '''
+        AddButton(assetCard, "EXPORT ALL EXPORTABLE ASSETS", "#1D4ED8", "#FFFFFF",
+            async () => await ExportAllStudioAssetsAsync());
+        AddButton(assetCard, "EXPORT SELECTED ASSETS", "#1D4ED8", "#FFFFFF",
+            async () => await ExportSelectedStudioAssetsAsync());'''
 if "ShowCabMapBuilder();" not in s:
     if s.count(asset_map_button) != 1:
         raise SystemExit("Could not locate AssetMap builder button")
-    s = s.replace(asset_map_button, cab_button, 1)
+    s = s.replace(asset_map_button, export_buttons, 1)
 
 anchor = "    private async Task ScanAssetsAsync()"
 methods = r"""
@@ -78,7 +83,7 @@ methods = r"""
             string appData = Path.Combine(FilesDir!.AbsolutePath, "Studio-HoK");
             StudioMobileMapService.Initialize(appData);
             string safeMapName = string.Concat(mapName.Select(ch =>
-                Path.GetInvalidFileNameChars().Contains(ch) || ch == '/' || ch == '\' ? '_' : ch)).Trim();
+                Path.GetInvalidFileNameChars().Contains(ch) || ch == '/' || ch == (char)92 ? '_' : ch)).Trim();
             if (safeMapName.Length == 0) throw new InvalidDataException("Tên map không hợp lệ.");
 
             string[] files = Directory.EnumerateFiles(inputFolder, "*", SearchOption.AllDirectories).ToArray();
