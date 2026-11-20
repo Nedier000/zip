@@ -99,6 +99,11 @@ public static class UnityFsBundleBuildService
             throw new InvalidDataException($"SerializedFile '{replacementName}' phải khớp đúng một entry trong UnityFS; tìm thấy {matches.Count}.");
 
         var target = matches[0];
+        if (target.stream == null || !target.stream.CanWrite)
+            throw new NotSupportedException("SerializedFile entry trong UnityFS không cho phép ghi; hãy dùng định dạng bundle được hỗ trợ.");
+        var replacementInfo = new FileInfo(replacementSerializedFile);
+        if (replacementInfo.Length <= 0 || replacementInfo.Length > MaxBundleBytes)
+            throw new InvalidDataException($"SerializedFile thay thế vượt kích thước an toàn: {replacementInfo.Length} byte.");
         var targetBytes = File.ReadAllBytes(replacementSerializedFile);
         if (targetBytes.LongLength != target.stream.Length)
             throw new InvalidDataException($"Không thể build khi kích thước SerializedFile thay đổi: gốc {target.stream.Length}, mới {targetBytes.LongLength} byte. Cần giữ nguyên kích thước để mọi offset trong bundle không bị dịch.");
