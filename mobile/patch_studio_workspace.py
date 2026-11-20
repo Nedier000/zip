@@ -23,7 +23,9 @@ replacement = r'''    private readonly StudioWorkspaceService workspace = new();
         Action<string>? log = null,
         string? unityVersion = null,
         bool resolveDependencies = true,
-        int selectedGame = (int)AssetStudio.GameType.HonorOfKings)
+        int selectedGame = (int)AssetStudio.GameType.HonorOfKings,
+        bool skipContainer = false,
+        bool displayAll = true)
     {
         if (!Directory.Exists(inputFolder))
             throw new DirectoryNotFoundException(inputFolder);
@@ -36,7 +38,7 @@ replacement = r'''    private readonly StudioWorkspaceService workspace = new();
             log: log,
             selectedGame: selectedGame);
 
-        var rows = workspace.GetAssetRows(includeAllObjects: true);
+        var rows = workspace.GetAssetRows(includeAllObjects: displayAll, skipContainer: skipContainer);
         var objects = rows.Select(row => new AssetEntry
         {
             Instance = row.Instance,
@@ -133,7 +135,8 @@ old_scan = "var result = await Task.Run(() => assetBrowser.Scan(input), token);"
 new_scan = """mobileSettings.ApplyCoreSettings();
             var result = await Task.Run(
                 () => assetBrowser.Scan(input, WriteStatus, mobileSettings.specifyUnityVersion,
-                    mobileSettings.enableResolveDependencies, mobileSettings.selectedGame), token);
+                    mobileSettings.enableResolveDependencies, mobileSettings.selectedGame,
+                    mobileSettings.skipContainer, mobileSettings.displayAll), token);
             var workspacePanels = await Task.Run(
                 () => (assetBrowser.GetSceneHierarchy(), assetBrowser.GetClassGroups()), token);
             sceneRoots = workspacePanels.Item1;
