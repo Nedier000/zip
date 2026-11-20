@@ -515,15 +515,17 @@ public sealed class StudioGlbExporter
                     positions[index * 3 + 2] = (targetVertex.Vertex.Z - baseVertex.Vertex.Z) * exportScale;
                     if (normals != null)
                     {
-                        normals[index * 3] = targetVertex.Normal.X - baseVertex.Normal.X;
-                        normals[index * 3 + 1] = targetVertex.Normal.Y - baseVertex.Normal.Y;
-                        normals[index * 3 + 2] = targetVertex.Normal.Z - baseVertex.Normal.Z;
+                        // ModelConverter stores morph normal deltas directly (unlike position,
+                        // whose ImportedVertex is base + delta).
+                        normals[index * 3] = targetVertex.Normal.X;
+                        normals[index * 3 + 1] = targetVertex.Normal.Y;
+                        normals[index * 3 + 2] = targetVertex.Normal.Z;
                     }
                     if (tangents != null)
                     {
-                        tangents[index * 3] = targetVertex.Tangent.X - baseVertex.Tangent.X;
-                        tangents[index * 3 + 1] = targetVertex.Tangent.Y - baseVertex.Tangent.Y;
-                        tangents[index * 3 + 2] = targetVertex.Tangent.Z - baseVertex.Tangent.Z;
+                        tangents[index * 3] = targetVertex.Tangent.X;
+                        tangents[index * 3 + 1] = targetVertex.Tangent.Y;
+                        tangents[index * 3 + 2] = targetVertex.Tangent.Z;
                     }
                 }
 
