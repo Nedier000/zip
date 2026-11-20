@@ -10,8 +10,6 @@ if "public static int GetAssetCount()" not in s:
         raise SystemExit("Could not locate ResourceIndex.Clear()")
     s = s.replace(anchor, """        public static int GetAssetCount() => Instance.Assets?.Count ?? 0;
 
-        public static int GetContainerCount() => BundleMap.Values.Sum(x => x.Count);
-
 """ + anchor, 1)
 path.write_text(s, encoding="utf-8")
 print("Added ResourceIndex load-count diagnostics.")
