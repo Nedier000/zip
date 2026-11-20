@@ -169,6 +169,13 @@ public static class StudioMobilePanels
         typeFlagsButton.Click += (_, _) => ShowTypeFlagsDialog(activity, settings, saved);
         content.AddView(typeFlagsButton, MatchWrap());
 
+        AddActionButton(content, "UV CHANNEL MAPPING (UV0–UV7)", () =>
+            ShowUvMappingDialog(activity, settings));
+        AddActionButton(content, "TEXTURE NAME / SEMANTIC MAPPING", () =>
+            ShowTextureMappingDialog(activity, settings));
+        AddActionButton(content, "AI VERSION / CABMAP / UNITYCN", () =>
+            ShowMapToolsDialog(activity, settings));
+
         AddLabel(content, "Unity version override");
         var unityVersion = new EditText(activity) { Text = settings.specifyUnityVersion, Hint = "Ví dụ: 2021.3.XXf1" };
         content.AddView(unityVersion, MatchWrap());
@@ -224,6 +231,271 @@ public static class StudioMobilePanels
                 saved?.Invoke();
                 Toast.MakeText(activity, "Đã lưu cấu hình Studio-HoK.", ToastLength.Short)!.Show();
             })
+            .Show();
+    }
+
+
+    private static void AddActionButton(LinearLayout parent, string title, Action action)
+    {
+        var button = new Button(parent.Context) { Text = title, TextSize = 12 };
+        button.SetAllCaps(false);
+        button.Click += (_, _) => action();
+        parent.AddView(button, MatchWrap());
+    }
+
+    private static readonly string[] TextureSemantics =
+    {
+        "Diffuse", "NormalMap", "Specular", "Bump",
+        "Ambient", "Emissive", "Reflection", "Displacement"
+    };
+
+    private static Dictionary<string, (bool, int)> ReadUvSettings(StudioMobileSettings settings)
+    {
+        Dictionary<string, (bool, int)> result;
+        try
+        {
+            result = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, (bool, int)>>(settings.uvs)
+                ?? new Dictionary<string, (bool, int)>();
+        }
+        catch { result = new Dictionary<string, (bool, int)>(); }
+
+        for (int i = 0; i < 8; i++)
+        {
+            string name = "UV" + i;
+            if (!result.ContainsKey(name)) result[name] = (i < 2, i == 1 ? 1 : 0);
+            var item = result[name];
+            result[name] = (item.Item1, Math.Clamp(item.Item2, 0, TextureSemantics.Length - 1));
+        }
+        return result;
+    }
+
+    private static void ShowUvMappingDialog(Activity activity, StudioMobileSettings settings)
+    {
+        var values = ReadUvSettings(settings);
+        var scroll = new ScrollView(activity);
+        var content = new LinearLayout(activity) { Orientation = Orientation.Vertical };
+        content.SetPadding(14, 8, 14, 8);
+        scroll.AddView(content);
+        var editors = new Dictionary<string, (CheckBox Enabled, Spinner Semantic)>();
+
+        for (int i = 0; i < 8; i++)
+        {
+            string name = "UV" + i;
+            var row = new LinearLayout(activity) { Orientation = Orientation.Horizontal };
+            row.SetGravity(GravityFlags.CenterVertical);
+            var enabled = new CheckBox(activity) { Text = name, Checked = values[name].Item1, TextSize = 13 };
+            row.AddView(enabled, new LinearLayout.LayoutParams(Dp(activity, 76), Dp(activity, 48)));
+            var semantic = new Spinner(activity);
+            semantic.Adapter = new ArrayAdapter<string>(activity, Android.Resource.Layout.SimpleSpinnerItem, TextureSemantics);
+            semantic.SetSelection(values[name].Item2);
+            row.AddView(semantic, new LinearLayout.LayoutParams(0, Dp(activity, 48), 1));
+            content.AddView(row, MatchWrap());
+            editors[name] = (enabled, semantic);
+        }
+
+        new AlertDialog.Builder(activity)
+            .SetTitle("UV CHANNEL MAPPING")
+            .SetView(scroll)
+            .SetNegativeButton("HỦY", (_, _) => { })
+            .SetPositiveButton("LƯU", (_, _) =>
+            {
+                foreach (var item in editors)
+                    values[item.Key] = (item.Value.Enabled.Checked, Math.Max(0, item.Value.Semantic.SelectedItemPosition));
+                settings.uvs = Newtonsoft.Json.JsonConvert.SerializeObject(values);
+                settings.Save();
+                Toast.MakeText(activity, "Đã lưu UV0–UV7.", ToastLength.Short)!.Show();
+            })
+            .Show();
+    }
+
+    private static void ShowTextureMappingDialog(Activity activity, StudioMobileSettings settings)
+    {
+        Dictionary<string, int> mappings;
+        try
+        {
+            mappings = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, int>>(settings.texs)
+                ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        }
+        catch { mappings = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase); }
+
+        var root = new LinearLayout(activity) { Orientation = Orientation.Vertical };
+        root.SetPadding(16, 8, 16, 8);
+        var name = new EditText(activity) { Hint = "Tên texture / chuỗi cần nhận diện" };
+        root.AddView(name, MatchWrap());
+        var semantic = new Spinner(activity);
+        semantic.Adapter = new ArrayAdapter<string>(activity, Android.Resource.Layout.SimpleSpinnerItem, TextureSemantics);
+        root.AddView(semantic, MatchWrap());
+
+        var existing = new ListView(activity);
+        void Refresh()
+        {
+            var labels = mappings.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(x => x.Key + "  →  " + TextureSemantics[Math.Clamp(x.Value, 0, TextureSemantics.Length - 1)])
+                .ToArray();
+            existing.Adapter = new ArrayAdapter<string>(activity, Android.Resource.Layout.SimpleListItem1, labels);
+            existing.ItemClick += RemoveSelected;
+        }
+        void RemoveSelected(object? sender, AdapterView.ItemClickEventArgs args)
+        {
+            var key = mappings.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).ElementAtOrDefault(args.Position).Key;
+            if (key != null) mappings.Remove(key);
+            Refresh();
+        }
+        Refresh();
+
+        var add = new Button(activity) { Text = "THÊM / CẬP NHẬT MAPPING" };
+        add.SetAllCaps(false);
+        add.Click += (_, _) =>
+        {
+            string key = (name.Text ?? string.Empty).Trim();
+            if (key.Length == 0)
+            {
+                Toast.MakeText(activity, "Nhập tên texture trước.", ToastLength.Short)!.Show();
+                return;
+            }
+            mappings[key] = Math.Clamp(semantic.SelectedItemPosition, 0, TextureSemantics.Length - 1);
+            name.Text = string.Empty;
+            Refresh();
+        };
+        root.AddView(add, MatchWrap());
+        root.AddView(new TextView(activity) { Text = "Chạm vào một dòng để xóa mapping.", TextSize = 11 });
+        root.AddView(existing, new LinearLayout.LayoutParams(-1, Dp(activity, 210)));
+
+        new AlertDialog.Builder(activity)
+            .SetTitle("TEXTURE NAME / SEMANTIC")
+            .SetView(root)
+            .SetNegativeButton("HỦY", (_, _) => { })
+            .SetPositiveButton("LƯU", (_, _) =>
+            {
+                settings.texs = Newtonsoft.Json.JsonConvert.SerializeObject(mappings);
+                settings.Save();
+                Toast.MakeText(activity, $"Đã lưu {mappings.Count:N0} texture mapping.", ToastLength.Short)!.Show();
+            })
+            .Show();
+    }
+
+    private static void ShowMapToolsDialog(Activity activity, StudioMobileSettings settings)
+    {
+        try
+        {
+            StudioMobileMapService.Initialize(System.IO.Path.Combine(activity.FilesDir!.AbsolutePath, "Studio-HoK"));
+        }
+        catch (Exception ex)
+        {
+            ShowError(activity, "Không khởi tạo được thư mục AI / Maps", ex);
+            return;
+        }
+
+        string[] tools =
+        {
+            "Cập nhật danh sách AI Version",
+            "Tải / chọn AI Version",
+            "Tải CABMap đã có",
+            "Chọn UnityCN key"
+        };
+
+        new AlertDialog.Builder(activity)
+            .SetTitle("STUDIO-HOK · MAP / AI TOOLS")
+            .SetItems(tools, async (_, args) =>
+            {
+                try
+                {
+                    switch (args.Which)
+                    {
+                        case 0:
+                        {
+                            bool ok = await StudioMobileMapService.RefreshAIVersionsAsync();
+                            Toast.MakeText(activity, ok ? "Đã cập nhật danh sách AI Version." : "Không lấy được danh sách AI Version.", ToastLength.Long)!.Show();
+                            break;
+                        }
+                        case 1:
+                        {
+                            var versions = StudioMobileMapService.GetAIVersions();
+                            if (versions.Count == 0)
+                            {
+                                Toast.MakeText(activity, "Danh sách AI Version trống. Hãy cập nhật trước.", ToastLength.Long)!.Show();
+                                break;
+                            }
+                            string[] labels = versions.Select(x => x.Version + (x.Downloaded ? "  [đã tải]" : "  [chưa tải]")).ToArray();
+                            new AlertDialog.Builder(activity)
+                                .SetTitle("CHỌN AI VERSION")
+                                .SetItems(labels, async (_, selected) =>
+                                {
+                                    try
+                                    {
+                                        string path = await StudioMobileMapService.DownloadAIAsync(versions[selected.Which].Version);
+                                        settings.selectedAIVersion = versions[selected.Which].Version;
+                                        settings.Save();
+                                        Toast.MakeText(activity, "AI đã sẵn sàng: " + System.IO.Path.GetFileName(path), ToastLength.Long)!.Show();
+                                    }
+                                    catch (Exception ex) { ShowError(activity, "Lỗi tải AI", ex); }
+                                })
+                                .SetNegativeButton("ĐÓNG", (_, _) => { })
+                                .Show();
+                            break;
+                        }
+                        case 2:
+                        {
+                            var maps = StudioMobileMapService.GetCABMaps();
+                            if (maps.Count == 0)
+                            {
+                                Toast.MakeText(activity, "Chưa có CABMap trong thư mục Maps.", ToastLength.Long)!.Show();
+                                break;
+                            }
+                            new AlertDialog.Builder(activity)
+                                .SetTitle("CHỌN CABMAP")
+                                .SetItems(maps.ToArray(), (_, selected) =>
+                                {
+                                    bool ok = StudioMobileMapService.LoadCABMap(maps[selected.Which]);
+                                    if (ok)
+                                    {
+                                        settings.selectedCABMapName = maps[selected.Which];
+                                        settings.Save();
+                                    }
+                                    Toast.MakeText(activity, ok ? "Đã nạp CABMap: " + maps[selected.Which] : "CABMap không nạp được.", ToastLength.Long)!.Show();
+                                })
+                                .SetNegativeButton("ĐÓNG", (_, _) => { })
+                                .Show();
+                            break;
+                        }
+                        case 3:
+                        {
+                            var keys = StudioMobileMapService.GetUnityCNKeys();
+                            if (keys.Count == 0)
+                            {
+                                Toast.MakeText(activity, "Không có UnityCN key. Kiểm tra Keys.json.", ToastLength.Long)!.Show();
+                                break;
+                            }
+                            new AlertDialog.Builder(activity)
+                                .SetTitle("CHỌN UNITYCN KEY")
+                                .SetItems(keys.ToArray(), (_, selected) =>
+                                {
+                                    bool ok = StudioMobileMapService.SetUnityCNKey(selected.Which);
+                                    if (ok)
+                                    {
+                                        settings.selectedUnityCNKey = selected.Which;
+                                        settings.Save();
+                                    }
+                                    Toast.MakeText(activity, ok ? "Đã chọn UnityCN key." : "UnityCN key không hợp lệ.", ToastLength.Long)!.Show();
+                                })
+                                .SetNegativeButton("ĐÓNG", (_, _) => { })
+                                .Show();
+                            break;
+                        }
+                    }
+                }
+                catch (Exception ex) { ShowError(activity, "Map / AI tool error", ex); }
+            })
+            .SetNegativeButton("ĐÓNG", (_, _) => { })
+            .Show();
+    }
+
+    private static void ShowError(Activity activity, string title, Exception ex)
+    {
+        new AlertDialog.Builder(activity)
+            .SetTitle(title)
+            .SetMessage(ex.Message)
+            .SetPositiveButton("ĐÓNG", (_, _) => { })
             .Show();
     }
 
