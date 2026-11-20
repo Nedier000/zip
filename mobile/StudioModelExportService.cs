@@ -48,10 +48,10 @@ public static class StudioModelExportService
         GameObject? gameObject = selected switch
         {
             GameObject go => go,
-            Animator animator when animator.m_GameObject.TryGet(out var go) => go,
-            MeshRenderer renderer when renderer.m_GameObject.TryGet(out var go) => go,
-            SkinnedMeshRenderer renderer when renderer.m_GameObject.TryGet(out var go) => go,
-            MeshFilter filter when filter.m_GameObject.TryGet(out var go) => go,
+            Animator animator when animator.m_GameObject.TryGet(out var animatorObject) => animatorObject,
+            MeshRenderer renderer when renderer.m_GameObject.TryGet(out var rendererObject) => rendererObject,
+            SkinnedMeshRenderer skinnedRenderer when skinnedRenderer.m_GameObject.TryGet(out var skinnedObject) => skinnedObject,
+            MeshFilter filter when filter.m_GameObject.TryGet(out var filterObject) => filterObject,
             _ => null
         };
 
