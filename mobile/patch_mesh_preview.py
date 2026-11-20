@@ -50,7 +50,7 @@ new = """            if (entry.Instance is AssetStudio.AudioClip)
                     try
                     {
                         shaderText = new global::System.Text.UTF8Encoding(false, true).GetString(shaderSource);
-                        if (shaderText.IndexOf('\\0') >= 0) shaderText = string.Empty;
+                        if (shaderText.Any(character => character == (char)0)) shaderText = string.Empty;
                     }
                     catch (global::System.Text.DecoderFallbackException)
                     {
