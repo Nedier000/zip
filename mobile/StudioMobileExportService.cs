@@ -4,8 +4,19 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using System.Text;
 
 namespace HoKTool.Android;
+
+public enum StudioMobileExportMode
+{
+    Convert,
+    Raw,
+    Dump,
+    Json
+}
 
 public sealed record StudioBulkExportResult(
     int Considered,
@@ -25,7 +36,8 @@ public static class StudioMobileExportService
         string outputFolder,
         StudioMobileSettings settings,
         CancellationToken cancellationToken = default,
-        IProgress<string>? progress = null)
+        IProgress<string>? progress = null,
+        StudioMobileExportMode mode = StudioMobileExportMode.Convert)
     {
         if (sourceRows == null) throw new ArgumentNullException(nameof(sourceRows));
         if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentException("Output folder is empty.", nameof(outputFolder));
@@ -73,7 +85,7 @@ public static class StudioMobileExportService
                 }
             }
 
-            if (isModelEntry && model != null && HasModelSafe(model))
+            if (mode == StudioMobileExportMode.Convert && isModelEntry && model != null && HasModelSafe(model))
             {
                 if (!exportedModels.Add(model))
                 {
@@ -126,15 +138,7 @@ public static class StudioMobileExportService
 
             try
             {
-                var entry = new AssetEntry
-                {
-                    Instance = row.Instance,
-                    Name = assetName,
-                    TypeName = row.TypeName,
-                    Source = row.Source,
-                    PathId = row.PathId
-                };
-                string written = AssetBrowser.Export(entry, groupFolder);
+                string written = ExportSingleAsset(row, assetName, groupFolder, settings, mode);
                 if (string.IsNullOrWhiteSpace(written) || !File.Exists(written))
                 {
                     skipped++;
@@ -151,6 +155,100 @@ public static class StudioMobileExportService
         }
 
         return new StudioBulkExportResult(considered, exported, skipped, errors);
+    }
+
+    private static string ExportSingleAsset(
+        StudioAssetRow row,
+        string assetName,
+        string outputFolder,
+        StudioMobileSettings settings,
+        StudioMobileExportMode mode)
+    {
+        var asset = row.Instance;
+        if (mode == StudioMobileExportMode.Convert)
+        {
+            // The desktop ShaderConverter imports Vortice/D3DCompiler native
+            // libraries. Android exports available source text, or preserves
+            // the original binary object instead of invoking that path.
+            if (asset is Shader shader)
+            {
+                byte[] script = shader.m_Script ?? Array.Empty<byte>();
+                string text = string.Empty;
+                if (script.Length > 0)
+                {
+                    try { text = new UTF8Encoding(false, true).GetString(script); }
+                    catch (DecoderFallbackException) { }
+                }
+                if (!string.IsNullOrWhiteSpace(text) && !text.Any(ch => ch == (char)0))
+                    return WriteUnique(outputFolder, assetName, ".shader", Encoding.UTF8.GetBytes(text));
+                return WriteUnique(outputFolder, assetName, ".dat", asset.GetRawData());
+            }
+
+            // FMOD's Windows native decoder is not loaded on Android. Preserve
+            // the original encoded stream; Android MediaPlayer handles preview
+            // when the codec is supported by the OS.
+            if (asset is AudioClip audio)
+            {
+                byte[] data = audio.m_AudioData?.GetData() ?? Array.Empty<byte>();
+                if (data.Length == 0) return string.Empty;
+                return WriteUnique(outputFolder, assetName, DetectAudioExtension(data), data);
+            }
+
+            var entry = new AssetEntry
+            {
+                Instance = asset,
+                Name = assetName,
+                TypeName = row.TypeName,
+                Source = row.Source,
+                PathId = row.PathId
+            };
+            return AssetBrowser.Export(entry, outputFolder);
+        }
+
+        if (mode == StudioMobileExportMode.Raw)
+            return WriteUnique(outputFolder, assetName, ".dat", asset.GetRawData());
+
+        if (mode == StudioMobileExportMode.Dump)
+        {
+            string? dump = null;
+            try { dump = asset.Dump(); }
+            catch { }
+            if (string.IsNullOrWhiteSpace(dump)) return string.Empty;
+            return WriteUnique(outputFolder, assetName, ".txt", Encoding.UTF8.GetBytes(dump));
+        }
+
+        var jsonSettings = new JsonSerializerSettings { Formatting = Formatting.Indented };
+        jsonSettings.Converters.Add(new StringEnumConverter());
+        string json = JsonConvert.SerializeObject(asset, jsonSettings);
+        return WriteUnique(outputFolder, assetName, ".json", Encoding.UTF8.GetBytes(json));
+    }
+
+    private static string WriteUnique(string folder, string name, string extension, byte[] data)
+    {
+        if (data == null || data.Length == 0) return string.Empty;
+        string stem = SafeSegment(name);
+        if (string.IsNullOrWhiteSpace(stem)) stem = "Asset";
+        Directory.CreateDirectory(folder);
+        string path = Path.Combine(folder, stem + extension);
+        if (File.Exists(path)) throw new IOException($"Export target already exists: {path}");
+        using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        output.Write(data, 0, data.Length);
+        return path;
+    }
+
+    private static string DetectAudioExtension(byte[] data)
+    {
+        if (data.Length >= 4)
+        {
+            if (data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x4F, 0x67, 0x67, 0x53 })) return ".ogg";
+            if (data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x52, 0x49, 0x46, 0x46 })) return ".wav";
+            if (data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x46, 0x53, 0x42, 0x35 })) return ".fsb";
+            if (data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x49, 0x44, 0x33, 0x00 })) return ".mp3";
+            if (data.AsSpan(0, 4).SequenceEqual(new byte[] { 0x00, 0x00, 0x00, 0x18 }) &&
+                data.AsSpan(4, 4).SequenceEqual(new byte[] { 0x66, 0x74, 0x79, 0x70 })) return ".mp4";
+        }
+        if (data.Length >= 2 && data[0] == 0xFF && (data[1] & 0xE0) == 0xE0) return ".mp3";
+        return ".audio";
     }
 
     public static StudioBulkExportResult ExportSceneRoots(
